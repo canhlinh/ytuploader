@@ -138,3 +138,8 @@ WAIT_SUBMIT:
 
 	return videoURL, nil
 }
+
+// Stop stops the chromedrive instance
+func (ul *YtUploader) Stop() {
+	ul.Driver.Stop()
+}

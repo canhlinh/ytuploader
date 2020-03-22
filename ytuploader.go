@@ -2,6 +2,7 @@ package ytuploader
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -31,7 +32,7 @@ func New() *YtUploader {
 }
 
 // Upload uploads file to Youtube
-func (ul *YtUploader) Upload(filepath string, cookies []*http.Cookie) (string, error) {
+func (ul *YtUploader) Upload(channel string, filepath string, cookies []*http.Cookie) (string, error) {
 	page, err := ul.Driver.NewPage(agouti.Browser("chrome"))
 	if err != nil {
 		return "", err
@@ -48,7 +49,12 @@ func (ul *YtUploader) Upload(filepath string, cookies []*http.Cookie) (string, e
 		}
 	}
 
-	page.Navigate("https://youtube.com/upload")
+	uploadURL := "https://youtube.com/upload"
+	if channel != "" {
+		uploadURL = fmt.Sprintf("https://studio.youtube.com/channel/%s", channel)
+	}
+
+	page.Navigate(uploadURL)
 	if err := page.FindByXPath("//input[@name='Filedata']").UploadFile(filepath); err != nil {
 		return "", err
 	}

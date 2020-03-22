@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/sclevine/agouti"
@@ -71,16 +72,21 @@ WAIT_SUBMIT:
 
 	for {
 
-		percent, err := page.Find(".progress.ytcp-uploads-dialog paper-progress.progress-container.style-scope.ytcp-video-upload-progress").Attribute("value")
+		value, err := page.Find(".progress.ytcp-uploads-dialog paper-progress.progress-container.style-scope.ytcp-video-upload-progress").Attribute("value")
 		if err != nil {
-			log.Fatal(err)
+			return "", err
 		}
 
-		log.Printf("Uploaded %s percent\n", percent)
-		time.Sleep(time.Second)
-		if percent == "100" {
+		percent, err := strconv.ParseInt(value, 10, 64)
+		if err != nil {
+			return "", err
+		}
+
+		log.Printf("Uploaded %d percent\n", percent)
+		if percent > 99 {
 			break
 		}
+		time.Sleep(time.Second)
 	}
 
 	if err := page.FindByName("NOT_MADE_FOR_KIDS").Click(); err != nil {

@@ -17,10 +17,14 @@ type YtUploader struct {
 }
 
 // New creates a new upload instance
-func New() *YtUploader {
-	driver := agouti.ChromeDriver(
-		agouti.ChromeOptions("args", []string{"--headless", "--disable-gpu", "--disable-crash-reporter"}),
-	)
+func New(headless bool) *YtUploader {
+
+	options := []agouti.Option{}
+	if headless {
+		options = append(options, agouti.ChromeOptions("args", []string{"--headless", "--disable-gpu", "--disable-crash-reporter"}))
+	}
+
+	driver := agouti.ChromeDriver(options...)
 
 	if err := driver.Start(); err != nil {
 		log.Fatal(err)
@@ -50,11 +54,23 @@ func (ul *YtUploader) Upload(channel string, filepath string, cookies []*http.Co
 	}
 
 	uploadURL := "https://youtube.com/upload"
+	uploadToChannel := false
+
 	if channel != "" {
 		uploadURL = fmt.Sprintf("https://studio.youtube.com/channel/%s", channel)
+		uploadToChannel = true
 	}
 
-	page.Navigate(uploadURL)
+	if err := page.Navigate(uploadURL); err != nil {
+		return "", err
+	}
+
+	if uploadToChannel {
+		if err := page.FindByID("upload-icon").Click(); err != nil {
+			return "", err
+		}
+	}
+
 	if err := page.FindByXPath("//input[@name='Filedata']").UploadFile(filepath); err != nil {
 		return "", err
 	}

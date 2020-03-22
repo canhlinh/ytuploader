@@ -123,6 +123,10 @@ WAIT_SUBMIT:
 		log.Fatal(err)
 	}
 
+	if err := page.FindByName("PRIVATE").Click(); err != nil {
+		log.Fatal(err)
+	}
+
 	if err := page.FindByID("done-button").Click(); err != nil {
 		log.Fatal(err)
 	}

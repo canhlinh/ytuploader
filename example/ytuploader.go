@@ -13,7 +13,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	uploader := ytuploader.New(false)
+	uploader := ytuploader.New(true)
 	videoURL, err := uploader.Upload("", "./sample.mov", cookies.Builtin())
 	if err != nil {
 		log.Fatal(err)

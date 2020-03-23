@@ -21,7 +21,16 @@ func New(headless bool) *YtUploader {
 
 	options := []agouti.Option{}
 	if headless {
-		options = append(options, agouti.ChromeOptions("args", []string{"--headless", "--disable-gpu", "--disable-crash-reporter"}))
+		options = append(options,
+			agouti.ChromeOptions(
+				"args",
+				[]string{
+					"--headless",
+					"--disable-gpu",
+					"--no-sandbox",
+					"--disable-crash-reporter",
+				}),
+		)
 	}
 
 	driver := agouti.ChromeDriver(options...)
@@ -62,6 +71,7 @@ func (ul *YtUploader) Upload(channel string, filepath string, cookies []*http.Co
 	}
 
 	if err := page.Navigate(uploadURL); err != nil {
+		page.Screenshot("screenshot/error.png")
 		return "", err
 	}
 
@@ -92,20 +102,27 @@ WAIT_SUBMIT:
 
 	}
 
+	uploadedPercent := int64(0)
 	for {
 
 		value, err := page.Find(".progress.ytcp-uploads-dialog paper-progress.progress-container.style-scope.ytcp-video-upload-progress").Attribute("value")
 		if err != nil {
-			return "", err
+			if uploadedPercent < 50 {
+				return "", err
+			}
+
+			log.Println("Upload completed")
+			break
 		}
 
-		percent, err := strconv.ParseInt(value, 10, 64)
+		uploadedPercent, err = strconv.ParseInt(value, 10, 64)
 		if err != nil {
 			return "", err
 		}
 
-		log.Printf("Uploaded %d percent\n", percent)
-		if percent > 99 {
+		log.Printf("Uploaded %d percent\n", uploadedPercent)
+		if uploadedPercent >= 99 {
+			log.Println("Upload completed")
 			break
 		}
 		time.Sleep(time.Second)
@@ -120,10 +137,6 @@ WAIT_SUBMIT:
 	}
 
 	if err := page.FindByID("next-button").Click(); err != nil {
-		log.Fatal(err)
-	}
-
-	if err := page.FindByName("PRIVATE").Click(); err != nil {
 		log.Fatal(err)
 	}
 

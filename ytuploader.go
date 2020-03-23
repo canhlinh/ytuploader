@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"path"
 	"strconv"
 	"time"
 
@@ -17,11 +18,12 @@ const (
 
 // YtUploader presents an uploader
 type YtUploader struct {
-	Driver *agouti.WebDriver
+	Driver           *agouti.WebDriver
+	screenshotFolder string
 }
 
 // New creates a new upload instance
-func New(headless bool) *YtUploader {
+func New(headless bool, screenshotFolder string) *YtUploader {
 
 	options := []agouti.Option{}
 	if headless {
@@ -94,6 +96,7 @@ WAIT_SUBMIT:
 	for {
 		select {
 		case <-timeout:
+			page.Screenshot(path.Join(ul.screenshotFolder, fmt.Sprintf("%d.png", time.Now().Unix())))
 			return "", errors.New("File can't start upload. Timeout")
 		default:
 			if count, err := page.All(VideoProgressBoxClass).Count(); err == nil && count > 0 {

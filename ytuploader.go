@@ -85,10 +85,11 @@ func (ul *YtUploader) Upload(channel string, filepath string, cookies []*http.Co
 		return "", err
 	}
 
+	timeout := time.NewTimer(time.Second * 3).C
 WAIT_SUBMIT:
 	for {
 		select {
-		case <-time.NewTimer(time.Second * 3).C:
+		case <-timeout:
 			return "", errors.New("File can't start upload. Timeout")
 		default:
 			if count, err := page.Find("a[class*='ytcp-video-metadata-info']").Count(); err == nil && count > 0 {

@@ -21,7 +21,15 @@ func New(headless bool) *YtUploader {
 
 	options := []agouti.Option{}
 	if headless {
-		options = append(options, agouti.ChromeOptions("args", []string{"--headless", "--disable-gpu", "--disable-crash-reporter"}))
+		options = append(options,
+			agouti.ChromeOptions(
+				"args",
+				[]string{
+					"--headless",
+					"--disable-gpu",
+					"--disable-crash-reporter",
+					"--disable-impl-side-painting",
+				}))
 	}
 
 	driver := agouti.ChromeDriver(options...)

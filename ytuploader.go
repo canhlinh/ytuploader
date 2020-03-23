@@ -11,6 +11,10 @@ import (
 	"github.com/sclevine/agouti"
 )
 
+const (
+	VideoProgressBoxClass = ".progress.ytcp-uploads-dialog paper-progress.progress-container.style-scope.ytcp-video-upload-progress"
+)
+
 // YtUploader presents an uploader
 type YtUploader struct {
 	Driver *agouti.WebDriver
@@ -85,14 +89,14 @@ func (ul *YtUploader) Upload(channel string, filepath string, cookies []*http.Co
 		return "", err
 	}
 
-	timeout := time.NewTimer(time.Second * 3).C
+	timeout := time.NewTimer(time.Second * 5).C
 WAIT_SUBMIT:
 	for {
 		select {
 		case <-timeout:
 			return "", errors.New("File can't start upload. Timeout")
 		default:
-			if count, err := page.Find("a[class*='ytcp-video-metadata-info']").Count(); err == nil && count > 0 {
+			if count, err := page.All(VideoProgressBoxClass).Count(); err == nil && count > 0 {
 				log.Println("File in uploading")
 				break WAIT_SUBMIT
 			} else {
@@ -106,7 +110,7 @@ WAIT_SUBMIT:
 	uploadedPercent := int64(0)
 	for {
 
-		value, err := page.Find(".progress.ytcp-uploads-dialog paper-progress.progress-container.style-scope.ytcp-video-upload-progress").Attribute("value")
+		value, err := page.Find(VideoProgressBoxClass).Attribute("value")
 		if err != nil {
 			if uploadedPercent < 50 {
 				return "", err

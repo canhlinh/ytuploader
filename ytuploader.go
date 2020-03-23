@@ -45,7 +45,7 @@ func New(headless bool) *YtUploader {
 }
 
 // Upload uploads file to Youtube
-func (ul *YtUploader) Upload(channel string, filepath string, cookies []*http.Cookie) (string, error) {
+func (ul *YtUploader) Upload(channel string, filepath string, cookies []*http.Cookie, save bool) (string, error) {
 	page, err := ul.Driver.NewPage(agouti.Browser("chrome"))
 	if err != nil {
 		return "", err
@@ -128,20 +128,22 @@ WAIT_SUBMIT:
 		time.Sleep(time.Second)
 	}
 
-	if err := page.FindByName("NOT_MADE_FOR_KIDS").Click(); err != nil {
-		log.Fatal(err)
-	}
+	if save {
+		if err := page.FindByName("NOT_MADE_FOR_KIDS").Click(); err != nil {
+			log.Fatal(err)
+		}
 
-	if err := page.FindByID("next-button").Click(); err != nil {
-		log.Fatal(err)
-	}
+		if err := page.FindByID("next-button").Click(); err != nil {
+			log.Fatal(err)
+		}
 
-	if err := page.FindByID("next-button").Click(); err != nil {
-		log.Fatal(err)
-	}
+		if err := page.FindByID("next-button").Click(); err != nil {
+			log.Fatal(err)
+		}
 
-	if err := page.FindByID("done-button").Click(); err != nil {
-		log.Fatal(err)
+		if err := page.FindByID("done-button").Click(); err != nil {
+			log.Fatal(err)
+		}
 	}
 
 	videoURL, err := page.Find("a[class*='ytcp-video-metadata-info']").Attribute("href")

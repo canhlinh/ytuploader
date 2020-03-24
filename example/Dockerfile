@@ -14,5 +14,6 @@ RUN apt-get autoremove && apt-get clean && rm chromedriver_linux64.zip
 
 ADD . ytuploader
 RUN cd ytuploader && go mod tidy
-
-RUN cd ytuploader/example && go run ytuploader.go
+RUN ls
+WORKDIR ytuploader/example
+CMD [ "go", "run", "ytuploader.go"]

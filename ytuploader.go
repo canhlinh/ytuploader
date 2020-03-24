@@ -35,6 +35,7 @@ func New(headless bool, screenshotFolder string) *YtUploader {
 					"--disable-gpu",
 					"--no-sandbox",
 					"--disable-crash-reporter",
+					"--disable-setuid-sandbox",
 				}),
 		)
 	}
@@ -56,9 +57,10 @@ func (ul *YtUploader) Upload(channel string, filepath string, cookies []*http.Co
 	if err != nil {
 		return "", err
 	}
+
 	defer page.CloseWindow()
 
-	if err := page.Navigate("https://youtube.com"); err != nil {
+	if err := page.Navigate("https://www.youtube.com"); err != nil {
 		return "", err
 	}
 
@@ -82,12 +84,13 @@ func (ul *YtUploader) Upload(channel string, filepath string, cookies []*http.Co
 	}
 
 	if uploadToChannel {
+		log.Println("Upload to channel")
 		if err := page.FindByID("upload-icon").Click(); err != nil {
 			return "", err
 		}
 	}
 
-	if err := page.FindByXPath("//input[@name='Filedata']").UploadFile(filepath); err != nil {
+	if err := page.AllByXPath("//input[@type='file']").UploadFile(filepath); err != nil {
 		return "", err
 	}
 

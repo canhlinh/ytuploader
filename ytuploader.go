@@ -47,7 +47,8 @@ func New(headless bool, screenshotFolder string) *YtUploader {
 	}
 
 	return &YtUploader{
-		Driver: driver,
+		Driver:           driver,
+		screenshotFolder: screenshotFolder,
 	}
 }
 

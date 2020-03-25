@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"path"
 	"strconv"
 	"time"
@@ -89,6 +90,10 @@ func (ul *YtUploader) Upload(channel string, filepath string, cookies []*http.Co
 		if err := page.FindByID("upload-icon").Click(); err != nil {
 			return "", err
 		}
+	}
+
+	if _, err := os.Stat(filepath); err != nil {
+		return "", err
 	}
 
 	if err := page.AllByXPath("//input[@type='file']").UploadFile(filepath); err != nil {

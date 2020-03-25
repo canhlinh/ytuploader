@@ -89,10 +89,22 @@ func (ul *YtUploader) Upload(channel string, filepath string, cookies []*http.Co
 
 	if uploadToChannel {
 		log.Println("Upload to channel")
-		if err := page.FindByID("upload-icon").Click(); err != nil {
-			return "", err
+
+		if count, err := page.AllByID("upload-button").Count(); err == nil && count > 0 {
+			if err := page.FindByID("upload-button").Click(); err != nil {
+				return "", err
+			}
+		} else {
+			if err := page.FindByID("upload-icon").Click(); err != nil {
+				return "", err
+			}
 		}
+
 	}
+
+	// if err := page.FindByID("animation").Click(); err != nil {
+	// 	return "", err
+	// }
 
 	if _, err := os.Stat(filepath); err != nil {
 		return "", err

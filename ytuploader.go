@@ -85,6 +85,8 @@ func (ul *YtUploader) Upload(channel string, filepath string, cookies []*http.Co
 		return "", err
 	}
 
+	time.Sleep(time.Second * 2)
+
 	if uploadToChannel {
 		log.Println("Upload to channel")
 		if err := page.FindByID("upload-icon").Click(); err != nil {

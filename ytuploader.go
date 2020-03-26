@@ -55,6 +55,7 @@ func New(headless bool, screenshotFolder string) *YtUploader {
 
 // Upload uploads file to Youtube
 func (ul *YtUploader) Upload(channel string, filepath string, cookies []*http.Cookie, save bool) (string, error) {
+
 	page, err := ul.Driver.NewPage(agouti.Browser("chrome"))
 	if err != nil {
 		return "", err
@@ -133,31 +134,34 @@ WAIT_SUBMIT:
 
 	}
 
-	uploadedPercent := int64(0)
+	percent := int64(0)
 	for {
 
 		value, err := page.Find(VideoProgressBoxClass).Attribute("value")
 		if err != nil {
-			if uploadedPercent < 50 {
+			if percent < 95 {
 				return "", err
 			}
 
-			log.Println("Upload completed")
+			log.Printf("Upload completed %d%%\n", percent)
 			break
 		}
 
-		uploadedPercent, err = strconv.ParseInt(value, 10, 64)
+		percent, err = strconv.ParseInt(value, 10, 64)
 		if err != nil {
 			return "", err
 		}
 
-		log.Printf("Uploaded %d percent\n", uploadedPercent)
-		if uploadedPercent == 100 {
-			log.Println("Upload completed")
+		log.Printf("Uploaded %d%%\n", percent)
+		if percent == 100 {
+			log.Printf("Upload completed %d%%\n", percent)
 			break
 		}
 		time.Sleep(time.Second)
 	}
+
+	// Sleep 5 seconds to ensure the uploading progress is done.
+	time.Sleep(time.Second * 5)
 
 	if save {
 		if err := page.FindByName("NOT_MADE_FOR_KIDS").Click(); err != nil {

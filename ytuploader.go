@@ -165,19 +165,19 @@ WAIT_SUBMIT:
 
 	if save {
 		if err := page.FindByName("NOT_MADE_FOR_KIDS").Click(); err != nil {
-			log.Fatal(err)
+			return "", err
 		}
 
 		if err := page.FindByID("next-button").Click(); err != nil {
-			log.Fatal(err)
+			return "", err
 		}
 
 		if err := page.FindByID("next-button").Click(); err != nil {
-			log.Fatal(err)
+			return "", err
 		}
 
 		if err := page.FindByID("done-button").Click(); err != nil {
-			log.Fatal(err)
+			return "", err
 		}
 	}
 

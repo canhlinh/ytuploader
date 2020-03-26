@@ -152,7 +152,7 @@ WAIT_SUBMIT:
 		}
 
 		log.Printf("Uploaded %d percent\n", uploadedPercent)
-		if uploadedPercent >= 99 {
+		if uploadedPercent == 100 {
 			log.Println("Upload completed")
 			break
 		}

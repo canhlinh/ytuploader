@@ -6,15 +6,10 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"path"
 	"strconv"
 	"time"
 
 	"github.com/sclevine/agouti"
-)
-
-const (
-	VideoProgressBoxClass = ".progress.ytcp-uploads-dialog paper-progress.progress-container.style-scope.ytcp-video-upload-progress"
 )
 
 // YtUploader presents an uploader
@@ -90,7 +85,6 @@ func (ul *YtUploader) Upload(channel string, filepath string, cookies []*http.Co
 
 	if uploadToChannel {
 		log.Println("Upload to channel")
-
 		if count, err := page.AllByID("upload-button").Count(); err == nil && count > 0 {
 			if err := page.FindByID("upload-button").Click(); err != nil {
 				return "", err
@@ -103,10 +97,6 @@ func (ul *YtUploader) Upload(channel string, filepath string, cookies []*http.Co
 
 	}
 
-	// if err := page.FindByID("animation").Click(); err != nil {
-	// 	return "", err
-	// }
-
 	if _, err := os.Stat(filepath); err != nil {
 		return "", err
 	}
@@ -115,29 +105,14 @@ func (ul *YtUploader) Upload(channel string, filepath string, cookies []*http.Co
 		return "", err
 	}
 
-	timeout := time.NewTimer(time.Second * 5).C
-WAIT_SUBMIT:
-	for {
-		select {
-		case <-timeout:
-			page.Screenshot(path.Join(ul.screenshotFolder, fmt.Sprintf("%d.png", time.Now().Unix())))
-			return "", errors.New("File can't start upload. Timeout")
-		default:
-			if count, err := page.All(VideoProgressBoxClass).Count(); err == nil && count > 0 {
-				log.Println("File in uploading")
-				break WAIT_SUBMIT
-			} else {
-				log.Println("Waiting file submit")
-				time.Sleep(time.Second)
-			}
-		}
-
+	if err := waitFileSubmitting(page); err != nil {
+		return "", err
 	}
 
 	percent := int64(0)
 	for {
 
-		value, err := page.Find(VideoProgressBoxClass).Attribute("value")
+		value, err := page.Find(".progress-container.ytcp-video-upload-progress").Attribute("value")
 		if err != nil {
 			if percent < 95 {
 				return "", err
@@ -192,4 +167,23 @@ WAIT_SUBMIT:
 // Stop stops the chromedrive instance
 func (ul *YtUploader) Stop() {
 	ul.Driver.Stop()
+}
+
+func waitFileSubmitting(page *agouti.Page) error {
+	timeout := time.NewTimer(time.Second * 5).C
+	for {
+		select {
+		case <-timeout:
+			return errors.New("File can't start upload. Timeout")
+		default:
+			if count, err := page.All("ytcp-uploads-details").Count(); err == nil && count > 0 {
+				log.Println("File in uploading")
+				return nil
+
+			} else {
+				log.Println("Waiting file submit")
+				time.Sleep(time.Second)
+			}
+		}
+	}
 }

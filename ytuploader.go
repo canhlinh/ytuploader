@@ -14,48 +14,45 @@ import (
 
 // YtUploader presents an uploader
 type YtUploader struct {
-	Driver           *agouti.WebDriver
 	screenshotFolder string
 }
 
 // New creates a new upload instance
-func New(headless bool, screenshotFolder string) *YtUploader {
-
-	options := []agouti.Option{}
-	if headless {
-		options = append(options,
-			agouti.ChromeOptions(
-				"args",
-				[]string{
-					"--headless",
-					"--disable-gpu",
-					"--no-sandbox",
-					"--disable-crash-reporter",
-					"--disable-setuid-sandbox",
-				}),
-		)
-	}
-
-	driver := agouti.ChromeDriver(options...)
-
-	if err := driver.Start(); err != nil {
-		log.Fatal(err)
-	}
+func New(screenshotFolder string) *YtUploader {
 
 	return &YtUploader{
-		Driver:           driver,
 		screenshotFolder: screenshotFolder,
 	}
 }
 
 // Upload uploads file to Youtube
 func (ul *YtUploader) Upload(channel string, filepath string, cookies []*http.Cookie, save bool) (string, error) {
+	httpClient := &http.Client{}
+	defer httpClient.CloseIdleConnections()
 
-	page, err := ul.Driver.NewPage(agouti.Browser("chrome"))
+	options := []agouti.Option{
+		agouti.HTTPClient(httpClient),
+		agouti.ChromeOptions(
+			"args",
+			[]string{
+				"--headless",
+				"--disable-gpu",
+				"--no-sandbox",
+				"--disable-crash-reporter",
+				"--disable-setuid-sandbox",
+			}),
+	}
+
+	driver := agouti.ChromeDriver(options...)
+	if err := driver.Start(); err != nil {
+		log.Fatal(err)
+	}
+	defer driver.Stop()
+
+	page, err := driver.NewPage(agouti.Browser("chrome"))
 	if err != nil {
 		return "", err
 	}
-
 	defer page.CloseWindow()
 
 	if err := page.Navigate("https://www.youtube.com"); err != nil {
@@ -80,8 +77,6 @@ func (ul *YtUploader) Upload(channel string, filepath string, cookies []*http.Co
 		page.Screenshot("screenshot/error.png")
 		return "", err
 	}
-
-	time.Sleep(time.Second * 2)
 
 	if uploadToChannel {
 		log.Println("Upload to channel")
@@ -163,11 +158,6 @@ func (ul *YtUploader) Upload(channel string, filepath string, cookies []*http.Co
 	}
 
 	return videoURL, nil
-}
-
-// Stop stops the chromedrive instance
-func (ul *YtUploader) Stop() {
-	ul.Driver.Stop()
 }
 
 func waitFileSubmitting(page *agouti.Page) error {

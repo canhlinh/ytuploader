@@ -97,6 +97,7 @@ func (ul *YtUploader) Upload(channel string, filepath string, cookies []*http.Co
 
 	}
 
+	time.Sleep(time.Second * 2)
 	if _, err := os.Stat(filepath); err != nil {
 		return "", err
 	}

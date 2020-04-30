@@ -77,6 +77,7 @@ func (ul *YtUploader) Upload(channel string, filepath string, cookies []*http.Co
 		page.Screenshot("screenshot/error.png")
 		return "", err
 	}
+	time.Sleep(time.Second * 3)
 
 	if uploadToChannel {
 		log.Println("Upload to channel")
@@ -92,7 +93,6 @@ func (ul *YtUploader) Upload(channel string, filepath string, cookies []*http.Co
 
 	}
 
-	time.Sleep(time.Second * 2)
 	if _, err := os.Stat(filepath); err != nil {
 		return "", err
 	}

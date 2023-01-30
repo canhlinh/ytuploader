@@ -40,7 +40,7 @@ func (ul *YtUploader) Upload(channel string, filename string, cookies []*Cookie,
 		"--no-sandbox",
 		"--disable-dev-shm-usage",
 		"--disable-gpu",
-		// "--headless",  // comment out this line to see the browser
+		"--headless", // comment out this line to see the browser
 	}})
 
 	driver, err := selenium.NewRemote(caps, "")

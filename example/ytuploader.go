@@ -1,9 +1,9 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"runtime"
-	"sync"
 
 	"github.com/canhlinh/ytuploader"
 )
@@ -16,19 +16,10 @@ func main() {
 		log.Fatal(err)
 	}
 
-	w := &sync.WaitGroup{}
-	for i := 0; i < 2; i++ {
-		threadNumber := i
-		w.Add(1)
-		go func() {
-			defer w.Done()
-			uploader := ytuploader.New(".")
-			videoURL, err := uploader.Upload("", "./big_buck_bunny_720p_20mb.mp4", cookies.Builtin(), false)
-			if err != nil {
-				log.Fatal(err)
-			}
-			log.Printf("Upload completed thread %d url %s\n", threadNumber, videoURL)
-		}()
+	uploader := ytuploader.New(".")
+	videoURL, err := uploader.Upload("", "./big_buck_bunny_720p_20mb.mp4", cookies, false)
+	if err != nil {
+		log.Fatal(err)
 	}
-	w.Wait()
+	fmt.Println(videoURL)
 }

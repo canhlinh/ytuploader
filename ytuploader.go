@@ -4,12 +4,13 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"net/http"
 	"os"
-	"strconv"
 	"time"
 
-	"github.com/sclevine/agouti"
+	"path/filepath"
+
+	"github.com/tebeka/selenium"
+	"github.com/tebeka/selenium/chrome"
 )
 
 // YtUploader presents an uploader
@@ -26,44 +27,46 @@ func New(screenshotFolder string) *YtUploader {
 }
 
 // Upload uploads file to Youtube
-func (ul *YtUploader) Upload(channel string, filepath string, cookies []*http.Cookie, save bool) (string, error) {
-	httpClient := &http.Client{}
-	defer httpClient.CloseIdleConnections()
-
-	options := []agouti.Option{
-		agouti.HTTPClient(httpClient),
-		agouti.ChromeOptions(
-			"args",
-			[]string{
-				"--headless",
-				"--disable-gpu",
-				"--no-sandbox",
-				"--disable-crash-reporter",
-				"--disable-setuid-sandbox",
-			}),
-	}
-
-	driver := agouti.ChromeDriver(options...)
-	if err := driver.Start(); err != nil {
-		log.Fatal(err)
-	}
-	defer driver.Stop()
-
-	page, err := driver.NewPage(agouti.Browser("chrome"))
+func (ul *YtUploader) Upload(channel string, filename string, cookies []*Cookie, save bool) (string, error) {
+	service, err := selenium.NewChromeDriverService("chromedriver", 4444)
 	if err != nil {
 		return "", err
 	}
-	defer page.CloseWindow()
+	defer service.Stop()
 
-	if err := page.Navigate("https://www.youtube.com"); err != nil {
+	caps := selenium.Capabilities{}
+	caps.AddChrome(chrome.Capabilities{Args: []string{
+		"window-size=1920x1080",
+		"--no-sandbox",
+		"--disable-dev-shm-usage",
+		"--disable-gpu",
+		// "--headless",  // comment out this line to see the browser
+	}})
+
+	driver, err := selenium.NewRemote(caps, "")
+	if err != nil {
+		return "", err
+	}
+	defer driver.Close()
+
+	if err := driver.Get("https://www.youtube.com"); err != nil {
 		return "", err
 	}
 
 	for _, cookie := range cookies {
-		if err := page.SetCookie(cookie); err != nil {
+		if err := driver.AddCookie(&selenium.Cookie{
+			Name:   cookie.Name,
+			Value:  cookie.Value,
+			Path:   cookie.Path,
+			Domain: cookie.Domain,
+			Secure: cookie.Secure,
+			Expiry: uint(cookie.ExpirationDate),
+		}); err != nil {
 			return "", err
 		}
 	}
+
+	time.Sleep(time.Second * 1)
 
 	uploadURL := "https://youtube.com/upload"
 	uploadToChannel := false
@@ -73,108 +76,96 @@ func (ul *YtUploader) Upload(channel string, filepath string, cookies []*http.Co
 		uploadToChannel = true
 	}
 
-	if err := page.Navigate(uploadURL); err != nil {
-		page.Screenshot("screenshot/error.png")
+	if err := driver.Get(uploadURL); err != nil {
 		return "", err
 	}
-	time.Sleep(time.Second * 3)
 
 	if uploadToChannel {
 		log.Println("Upload to channel")
-		if count, err := page.AllByID("upload-button").Count(); err == nil && count > 0 {
-			if err := page.FindByID("upload-button").Click(); err != nil {
-				return "", err
-			}
-		} else {
-			if err := page.FindByID("upload-icon").Click(); err != nil {
-				return "", err
-			}
-		}
-
-	}
-
-	if _, err := os.Stat(filepath); err != nil {
-		return "", err
-	}
-
-	if err := page.AllByXPath("//input[@type='file']").UploadFile(filepath); err != nil {
-		return "", err
-	}
-
-	if err := waitFileSubmitting(page); err != nil {
-		return "", err
-	}
-
-	percent := int64(0)
-	for {
-
-		value, err := page.Find(".progress-container.ytcp-video-upload-progress").Attribute("value")
+		button, err := driver.FindElement(selenium.ByID, "upload-button")
 		if err != nil {
-			if percent < 95 {
+			button, err = driver.FindElement(selenium.ByID, "upload-icon")
+			if err != nil {
 				return "", err
 			}
-
-			log.Printf("Upload completed %d%%\n", percent)
-			break
 		}
-
-		percent, err = strconv.ParseInt(value, 10, 64)
-		if err != nil {
-			return "", err
-		}
-
-		log.Printf("Uploaded %d%%\n", percent)
-		if percent == 100 {
-			log.Printf("Upload completed %d%%\n", percent)
-			break
-		}
-		time.Sleep(time.Second)
-	}
-
-	// Sleep 5 seconds to ensure the uploading progress is done.
-	time.Sleep(time.Second * 5)
-
-	if save {
-		if err := page.FindByName("NOT_MADE_FOR_KIDS").Click(); err != nil {
-			return "", err
-		}
-
-		if err := page.FindByID("next-button").Click(); err != nil {
-			return "", err
-		}
-
-		if err := page.FindByID("next-button").Click(); err != nil {
-			return "", err
-		}
-
-		if err := page.FindByID("done-button").Click(); err != nil {
+		if err := button.Click(); err != nil {
 			return "", err
 		}
 	}
 
-	videoURL, err := page.Find("a[class*='ytcp-video-metadata-info']").Attribute("href")
+	absFilePath, err := filepath.Abs(filename)
 	if err != nil {
 		return "", err
 	}
 
-	return videoURL, nil
-}
+	if _, err := os.Stat(absFilePath); err != nil {
+		return "", err
+	}
 
-func waitFileSubmitting(page *agouti.Page) error {
-	timeout := time.NewTimer(time.Second * 5).C
+	element, err := driver.FindElement(selenium.ByXPATH, "//div[@id='content']/input")
+	if err != nil {
+		return "", err
+	}
+
+	if err := element.SendKeys(absFilePath); err != nil {
+		return "", err
+	}
+
+	if err := driver.WaitWithTimeout(func(wd selenium.WebDriver) (bool, error) {
+		_, err := wd.FindElement(selenium.ByCSSSelector, ".ytcp-uploads-dialog")
+		return err == nil, err
+	}, 3*time.Second); err != nil {
+		return "", err
+	}
+
+	if save {
+		if e, err := driver.FindElement(selenium.ByName, "NOT_MADE_FOR_KIDS"); err != nil {
+			return "", err
+		} else {
+			e.Click()
+		}
+
+		if e, err := driver.FindElement(selenium.ByID, "next-button"); err != nil {
+			return "", err
+		} else {
+			e.Click()
+		}
+
+		if e, err := driver.FindElement(selenium.ByID, "next-button"); err != nil {
+			return "", err
+		} else {
+			e.Click()
+		}
+
+		if e, err := driver.FindElement(selenium.ByID, "done-button"); err != nil {
+			return "", err
+		} else {
+			e.Click()
+		}
+	}
+
+	timeout := time.NewTimer(time.Hour)
+	ticker := time.NewTicker(3 * time.Second)
 	for {
 		select {
-		case <-timeout:
-			return errors.New("File can't start upload. Timeout")
+		case <-timeout.C:
+			return "", errors.New("upload timeout")
 		default:
-			if count, err := page.All("ytcp-uploads-details").Count(); err == nil && count > 0 {
-				log.Println("File in uploading")
-				return nil
-
+			if e, err := driver.FindElement(selenium.ByCSSSelector, "a.style-scope.ytcp-video-info"); err != nil {
+				<-ticker.C
 			} else {
-				log.Println("Waiting file submit")
-				time.Sleep(time.Second)
+				href, err := e.GetAttribute("href")
+				if err != nil {
+					return "", err
+				}
+				if href == "" {
+					<-ticker.C
+				} else {
+					return href, nil
+				}
 			}
 		}
+
 	}
 }

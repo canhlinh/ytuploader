@@ -126,7 +126,7 @@ func (ul *YtUploader) Upload(channel string, filename string, cookies []*Cookie,
 	}
 
 	if save {
-		if e, err := driver.FindElement(selenium.ByName, "NOT_MADE_FOR_KIDS"); err != nil {
+		if e, err := driver.FindElement(selenium.ByName, "VIDEO_MADE_FOR_KIDS_NOT_MFK"); err != nil {
 			return "", err
 		} else {
 			e.Click()

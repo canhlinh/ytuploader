@@ -5,11 +5,12 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"strings"
+	"strconv"
 	"time"
 
 	"path/filepath"
 
+	"github.com/schollz/progressbar/v3"
 	"github.com/tebeka/selenium"
 	"github.com/tebeka/selenium/chrome"
 )
@@ -150,36 +151,44 @@ func (ul *YtUploader) Upload(channel string, filename string, cookies []*Cookie,
 		}
 	}
 
-	if err := driver.WaitWithTimeoutAndInterval(func(wd selenium.WebDriver) (bool, error) {
-		_, err := wd.FindElement(selenium.ByXPATH, `//tp-yt-paper-progress[contains(@class,"ytcp-video-upload-progress-hover") and @value="100"]`)
-		if err == nil {
-			return true, nil
-		}
-		curProgress := getCurrentUploadProgress(wd)
-		fmt.Println(curProgress)
-		return err == nil, nil
-	}, 1*time.Hour, 1*time.Second); err != nil {
+	bar := progressbar.NewOptions(100,
+		progressbar.OptionShowBytes(false),
+		progressbar.OptionSetWidth(15),
+		progressbar.OptionSetDescription("Uploading..."),
+	)
+	if err := driver.WaitWithTimeout(func(wd selenium.WebDriver) (bool, error) {
+		curProgress := currentUploadProgress(wd)
+		bar.Add(curProgress)
+		return curProgress == 100, nil
+	}, 1*time.Hour); err != nil {
 		return "", errors.New("failed to upload video. timeout")
 	}
-
+	bar.Finish()
+	bar.Close()
 	return getVideoURL(driver)
 }
 
-func getCurrentUploadProgress(wd selenium.WebDriver) string {
-	items, err := wd.FindElements(selenium.ByCSSSelector, "span.progress-label.ytcp-video-upload-progress")
-	if err != nil {
-		return "Uploading 0%"
+func currentUploadProgress(wd selenium.WebDriver) int {
+	if e, err := wd.FindElement(selenium.ByXPATH, `//tp-yt-paper-progress[contains(@class,"ytcp-video-upload-progress-hover")]`); err == nil {
+		rawValue, _ := e.GetAttribute("value")
+		value, _ := strconv.Atoi(rawValue)
+		return value
 	}
-	for _, item := range items {
-		text, _ := item.Text()
-		if strings.Contains(text, "%") {
-			return text
-		}
-	}
-	return "Uploading 0%"
+	return 0
 }
 
 func getVideoURL(wd selenium.WebDriver) (string, error) {
+	bar := progressbar.NewOptions(-1,
+		progressbar.OptionSetWidth(15),
+		progressbar.OptionSpinnerType(9),
+		progressbar.OptionSetDescription("Generating video url"),
+	)
+
+	defer func() {
+		bar.Close()
+		fmt.Println()
+	}()
+
 	timeout := time.NewTimer(3 * time.Minute)
 	ticker := time.NewTicker(1 * time.Second)
 	for {
@@ -195,6 +204,7 @@ func getVideoURL(wd selenium.WebDriver) (string, error) {
 					return "", err
 				}
 				if href == "" {
+					bar.Add(1)
 					<-ticker.C
 				} else {
 					return href, nil

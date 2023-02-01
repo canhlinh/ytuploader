@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"strconv"
 	"time"
@@ -32,7 +33,7 @@ func New(screenshotFolder string) *YtUploader {
 }
 
 // Upload uploads file to Youtube
-func (ul *YtUploader) Upload(channel string, filename string, cookies []*Cookie, save bool) (string, error) {
+func (ul *YtUploader) Upload(channel string, filename string, cookies []*http.Cookie, save bool) (string, error) {
 	service, err := selenium.NewChromeDriverService("chromedriver", DefaultChromedriverPort)
 	if err != nil {
 		return "", err
@@ -66,7 +67,7 @@ func (ul *YtUploader) Upload(channel string, filename string, cookies []*Cookie,
 			Path:   cookie.Path,
 			Domain: cookie.Domain,
 			Secure: cookie.Secure,
-			Expiry: uint(cookie.ExpirationDate),
+			Expiry: uint(cookie.Expires.Unix()),
 		}); err != nil {
 			return "", err
 		}

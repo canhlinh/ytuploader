@@ -162,14 +162,32 @@ func (ul *YtUploader) Upload(channel string, filename string, cookies []*Cookie,
 		return "", errors.New("failed to upload video. timeout")
 	}
 
-	timeout := time.NewTimer(time.Minute)
+	return getVideoURL(driver)
+}
+
+func getCurrentUploadProgress(wd selenium.WebDriver) string {
+	items, err := wd.FindElements(selenium.ByCSSSelector, "span.progress-label.ytcp-video-upload-progress")
+	if err != nil {
+		return "Uploading 0%"
+	}
+	for _, item := range items {
+		text, _ := item.Text()
+		if strings.Contains(text, "%") {
+			return text
+		}
+	}
+	return "Uploading 0%"
+}
+
+func getVideoURL(wd selenium.WebDriver) (string, error) {
+	timeout := time.NewTimer(3 * time.Minute)
 	ticker := time.NewTicker(1 * time.Second)
 	for {
 		select {
 		case <-timeout.C:
 			return "", errors.New("upload timeout")
 		default:
-			if e, err := driver.FindElement(selenium.ByCSSSelector, "a.style-scope.ytcp-video-info"); err != nil {
+			if e, err := wd.FindElement(selenium.ByCSSSelector, "a.style-scope.ytcp-video-info"); err != nil {
 				<-ticker.C
 			} else {
 				href, err := e.GetAttribute("href")
@@ -185,18 +203,4 @@ func (ul *YtUploader) Upload(channel string, filename string, cookies []*Cookie,
 		}
 
 	}
-}
-
-func getCurrentUploadProgress(wd selenium.WebDriver) string {
-	items, err := wd.FindElements(selenium.ByCSSSelector, "span.progress-label.ytcp-video-upload-progress")
-	if err != nil {
-		return "Uploading 0%"
-	}
-	for _, item := range items {
-		text, _ := item.Text()
-		if strings.Contains(text, "%") {
-			return text
-		}
-	}
-	return "Uploading 0%"
 }

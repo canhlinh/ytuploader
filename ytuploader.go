@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"path/filepath"
@@ -12,6 +13,9 @@ import (
 	"github.com/tebeka/selenium"
 	"github.com/tebeka/selenium/chrome"
 )
+
+var DefaultChromedriverPort = 4444
+var DefaultUserAgent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36"
 
 // YtUploader presents an uploader
 type YtUploader struct {
@@ -28,7 +32,7 @@ func New(screenshotFolder string) *YtUploader {
 
 // Upload uploads file to Youtube
 func (ul *YtUploader) Upload(channel string, filename string, cookies []*Cookie, save bool) (string, error) {
-	service, err := selenium.NewChromeDriverService("chromedriver", 4444)
+	service, err := selenium.NewChromeDriverService("chromedriver", DefaultChromedriverPort)
 	if err != nil {
 		return "", err
 	}
@@ -41,6 +45,7 @@ func (ul *YtUploader) Upload(channel string, filename string, cookies []*Cookie,
 		"--disable-dev-shm-usage",
 		"--disable-gpu",
 		"--headless", // comment out this line to see the browser
+		"--user-agent=" + DefaultUserAgent,
 	}})
 
 	driver, err := selenium.NewRemote(caps, "")
@@ -66,8 +71,6 @@ func (ul *YtUploader) Upload(channel string, filename string, cookies []*Cookie,
 		}
 	}
 
-	time.Sleep(time.Second * 1)
-
 	uploadURL := "https://youtube.com/upload"
 	uploadToChannel := false
 
@@ -79,6 +82,8 @@ func (ul *YtUploader) Upload(channel string, filename string, cookies []*Cookie,
 	if err := driver.Get(uploadURL); err != nil {
 		return "", err
 	}
+
+	time.Sleep(time.Second)
 
 	if uploadToChannel {
 		log.Println("Upload to channel")
@@ -114,9 +119,9 @@ func (ul *YtUploader) Upload(channel string, filename string, cookies []*Cookie,
 
 	if err := driver.WaitWithTimeout(func(wd selenium.WebDriver) (bool, error) {
 		_, err := wd.FindElement(selenium.ByCSSSelector, ".ytcp-uploads-dialog")
-		return err == nil, err
+		return err == nil, nil
 	}, 3*time.Second); err != nil {
-		return "", err
+		return "", errors.New("failed to get ytcp-uploads-dialog. timeout")
 	}
 
 	if save {
@@ -145,8 +150,20 @@ func (ul *YtUploader) Upload(channel string, filename string, cookies []*Cookie,
 		}
 	}
 
-	timeout := time.NewTimer(time.Hour)
-	ticker := time.NewTicker(3 * time.Second)
+	if err := driver.WaitWithTimeoutAndInterval(func(wd selenium.WebDriver) (bool, error) {
+		_, err := wd.FindElement(selenium.ByXPATH, `//tp-yt-paper-progress[contains(@class,"ytcp-video-upload-progress-hover") and @value="100"]`)
+		if err == nil {
+			return true, nil
+		}
+		curProgress := getCurrentUploadProgress(wd)
+		fmt.Println(curProgress)
+		return err == nil, nil
+	}, 1*time.Hour, 1*time.Second); err != nil {
+		return "", errors.New("failed to upload video. timeout")
+	}
+
+	timeout := time.NewTimer(time.Minute)
+	ticker := time.NewTicker(1 * time.Second)
 	for {
 		select {
 		case <-timeout.C:
@@ -168,4 +185,18 @@ func (ul *YtUploader) Upload(channel string, filename string, cookies []*Cookie,
 		}
 
 	}
+}
+
+func getCurrentUploadProgress(wd selenium.WebDriver) string {
+	items, err := wd.FindElements(selenium.ByCSSSelector, "span.progress-label.ytcp-video-upload-progress")
+	if err != nil {
+		return "Uploading 0%"
+	}
+	for _, item := range items {
+		text, _ := item.Text()
+		if strings.Contains(text, "%") {
+			return text
+		}
+	}
+	return "Uploading 0%"
 }

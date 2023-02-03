@@ -171,7 +171,7 @@ func (ul *YtUploader) Upload(channel string, filename string, cookies []*http.Co
 
 		if save {
 
-			fmt.Println("chuan bi click")
+			
 
 			driver.ExecuteScript(`document.getElementById('toggle-button').scrollIntoView(false);`, nil)
 

@@ -6,10 +6,9 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"time"
-
-	"path/filepath"
 
 	"github.com/schollz/progressbar/v3"
 	"github.com/tebeka/selenium"
@@ -119,37 +118,34 @@ func (ul *YtUploader) Upload(channel string, filename string, cookies []*http.Co
 		return "", err
 	}
 
+
+
+	/*
+
+	   time.Sleep(8*time.Second)
+
+	   e, err:= driver.FindElement(selenium.ByCSSSelector, ".error-short.style-scope.ytcp-uploads-dialog")
+
+
+	   //e, err:= driver.FindElement(selenium.ByCSSSelector, ".error-area.style-scope.ytcp-uploads-dialog")
+
+
+	   if(err !=nil){
+
+	   }else{
+
+	   	rs, err :=e.Text()
+	   return rs, err
+
+	   }
+
+	*/
+
 	if err := driver.WaitWithTimeout(func(wd selenium.WebDriver) (bool, error) {
-		_, err := wd.FindElement(selenium.ByCSSSelector, ".ytcp-uploads-dialog")
+		_, err := wd.FindElement(selenium.ByCSSSelector, ".error-area.style-scope.ytcp-uploads-dialog")
 		return err == nil, nil
 	}, 3*time.Second); err != nil {
 		return "", errors.New("failed to get ytcp-uploads-dialog. timeout")
-	}
-
-	if save {
-		if e, err := driver.FindElement(selenium.ByName, "VIDEO_MADE_FOR_KIDS_NOT_MFK"); err != nil {
-			return "", err
-		} else {
-			e.Click()
-		}
-
-		if e, err := driver.FindElement(selenium.ByID, "next-button"); err != nil {
-			return "", err
-		} else {
-			e.Click()
-		}
-
-		if e, err := driver.FindElement(selenium.ByID, "next-button"); err != nil {
-			return "", err
-		} else {
-			e.Click()
-		}
-
-		if e, err := driver.FindElement(selenium.ByID, "done-button"); err != nil {
-			return "", err
-		} else {
-			e.Click()
-		}
 	}
 
 	bar := progressbar.NewOptions(100,
@@ -166,7 +162,76 @@ func (ul *YtUploader) Upload(channel string, filename string, cookies []*http.Co
 	}
 	bar.Finish()
 	bar.Close()
-	return getVideoURL(driver)
+
+	url, err := getVideoURL(driver)
+
+	if err != nil {
+		return "", err
+	} else {
+
+		if save {
+
+			fmt.Println("chuan bi click")
+
+			driver.ExecuteScript(`document.getElementById('toggle-button').scrollIntoView(false);`, nil)
+
+			if e, err := driver.FindElement(selenium.ByName, "VIDEO_MADE_FOR_KIDS_NOT_MFK"); err != nil {
+				return "", err
+			} else {
+				e.Click()
+			}
+			/*
+			   time.Sleep(2*time.Second)
+			   data, err = driver.Screenshot()
+
+
+			   if err != nil {
+
+			           }
+			           if err := ioutil.WriteFile("google1.com.png", data, 0644); err != nil {
+
+			           }
+
+			*/
+
+			time.Sleep(1 * time.Second)
+			if e, err := driver.FindElement(selenium.ByID, "next-button"); err != nil {
+				return "", err
+			} else {
+				e.Click()
+			}
+
+			time.Sleep(1 * time.Second)
+			if e, err := driver.FindElement(selenium.ByID, "next-button"); err != nil {
+				return "", err
+			} else {
+				e.Click()
+			}
+
+			time.Sleep(1 * time.Second)
+
+			if e, err := driver.FindElement(selenium.ByID, "next-button"); err != nil {
+				return "", err
+			} else {
+				e.Click()
+			}
+
+			time.Sleep(1 * time.Second)
+			if e, err := driver.FindElement(selenium.ByID, "done-button"); err != nil {
+				return "", err
+			} else {
+				e.Click()
+			}
+
+			time.Sleep(3 * time.Second)
+
+		}
+
+		return url, err
+
+	}
+
+	//return getVideoURL(driver)
 }
 
 func currentUploadProgress(wd selenium.WebDriver) int {

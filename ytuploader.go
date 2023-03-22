@@ -55,7 +55,7 @@ func (ul *YtUploader) Upload(channel string, filename string, cookies []*http.Co
 	}
 	defer driver.Close()
 
-	if err := driver.Get("https://www.youtube.com"); err != nil {
+	if err := driver.Get("https://www.youtube.com/?persist_gl=1&gl=US&persist_hl=1&hl=en"); err != nil {
 		return "", err
 	}
 
@@ -72,11 +72,11 @@ func (ul *YtUploader) Upload(channel string, filename string, cookies []*http.Co
 		}
 	}
 
-	uploadURL := "https://youtube.com/upload"
+	uploadURL := "https://youtube.com/upload?persist_gl=1&gl=US&persist_hl=1&hl=en"
 	uploadToChannel := false
 
 	if channel != "" {
-		uploadURL = fmt.Sprintf("https://studio.youtube.com/channel/%s", channel)
+		uploadURL = fmt.Sprintf("https://studio.youtube.com/channel/%s?persist_gl=1&gl=US&persist_hl=1&hl=en", channel)
 		uploadToChannel = true
 	}
 

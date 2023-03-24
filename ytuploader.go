@@ -45,7 +45,7 @@ func (ul *YtUploader) Upload(channel string, filename string, cookies []*http.Co
 		"--no-sandbox",
 		"--disable-dev-shm-usage",
 		"--disable-gpu",
-		"--headless", // comment out this line to see the browser
+		// "--headless", // comment out this line to see the browser
 		"--user-agent=" + DefaultUserAgent,
 	}})
 
@@ -132,7 +132,7 @@ func (ul *YtUploader) Upload(channel string, filename string, cookies []*http.Co
 	)
 	if err := driver.WaitWithTimeout(func(wd selenium.WebDriver) (bool, error) {
 		curProgress := currentUploadProgress(wd)
-		bar.Add(curProgress)
+		bar.Set(curProgress)
 		return curProgress == 100, nil
 	}, 1*time.Hour); err != nil {
 		return "", errors.New("failed to upload video. timeout")
@@ -140,6 +140,7 @@ func (ul *YtUploader) Upload(channel string, filename string, cookies []*http.Co
 	bar.Finish()
 	bar.Close()
 
+	time.Sleep(1 * time.Second)
 	url, err := getVideoURL(driver)
 
 	if err != nil {

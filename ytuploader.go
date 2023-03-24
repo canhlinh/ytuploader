@@ -45,7 +45,7 @@ func (ul *YtUploader) Upload(channel string, filename string, cookies []*http.Co
 		"--no-sandbox",
 		"--disable-dev-shm-usage",
 		"--disable-gpu",
-		// "--headless", // comment out this line to see the browser
+		"--headless", // comment out this line to see the browser
 		"--user-agent=" + DefaultUserAgent,
 	}})
 

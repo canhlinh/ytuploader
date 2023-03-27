@@ -3,6 +3,7 @@ package ytuploader
 import (
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -139,61 +140,57 @@ func (ul *YtUploader) Upload(channel string, filename string, cookies []*http.Co
 	}
 	bar.Finish()
 	bar.Close()
-
 	time.Sleep(1 * time.Second)
 	url, err := getVideoURL(driver)
-
 	if err != nil {
 		return "", err
-	} else {
+	}
+	if save {
+		driver.ExecuteScript(`document.getElementById('toggle-button').scrollIntoView(false);`, nil)
 
-		if save {
-
-			driver.ExecuteScript(`document.getElementById('toggle-button').scrollIntoView(false);`, nil)
-
-			if e, err := driver.FindElement(selenium.ByName, "VIDEO_MADE_FOR_KIDS_NOT_MFK"); err != nil {
-				return "", err
-			} else {
-				e.Click()
-			}
-
-			time.Sleep(1 * time.Second)
-			if e, err := driver.FindElement(selenium.ByID, "next-button"); err != nil {
-				return "", err
-			} else {
-				e.Click()
-			}
-
-			time.Sleep(1 * time.Second)
-			if e, err := driver.FindElement(selenium.ByID, "next-button"); err != nil {
-				return "", err
-			} else {
-				e.Click()
-			}
-
-			time.Sleep(1 * time.Second)
-
-			if e, err := driver.FindElement(selenium.ByID, "next-button"); err != nil {
-				return "", err
-			} else {
-				e.Click()
-			}
-
-			time.Sleep(1 * time.Second)
-			if e, err := driver.FindElement(selenium.ByID, "done-button"); err != nil {
-				return "", err
-			} else {
-				e.Click()
-			}
-
-			time.Sleep(3 * time.Second)
-
+		if e, err := driver.FindElement(selenium.ByName, "VIDEO_MADE_FOR_KIDS_NOT_MFK"); err != nil {
+			return "", err
+		} else {
+			e.Click()
 		}
 
-		return url, err
+		time.Sleep(1 * time.Second)
+		if e, err := driver.FindElement(selenium.ByID, "next-button"); err != nil {
+			return "", err
+		} else {
+			e.Click()
+		}
 
+		time.Sleep(1 * time.Second)
+		if e, err := driver.FindElement(selenium.ByID, "next-button"); err != nil {
+			return "", err
+		} else {
+			e.Click()
+		}
+
+		time.Sleep(1 * time.Second)
+
+		if e, err := driver.FindElement(selenium.ByID, "next-button"); err != nil {
+			return "", err
+		} else {
+			e.Click()
+		}
+
+		time.Sleep(1 * time.Second)
+		if e, err := driver.FindElement(selenium.ByID, "done-button"); err != nil {
+			return "", err
+		} else {
+			e.Click()
+		}
+
+		time.Sleep(3 * time.Second)
 	}
-
+	if len(ul.screenshotFolder) > 0 {
+		if data, err := driver.Screenshot(); err == nil {
+			ioutil.WriteFile(filepath.Join(ul.screenshotFolder, "screenshot.png"), data, 0644)
+		}
+	}
+	return url, err
 }
 
 func currentUploadProgress(wd selenium.WebDriver) int {

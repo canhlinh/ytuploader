@@ -21,14 +21,14 @@ var DefaultUserAgent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTM
 
 // YtUploader presents an uploader
 type YtUploader struct {
-	screenshotFolder string
+	scrPath string
 }
 
 // New creates a new upload instance
-func New(screenshotFolder string) *YtUploader {
+func New(screenshotPath string) *YtUploader {
 
 	return &YtUploader{
-		screenshotFolder: screenshotFolder,
+		scrPath: screenshotPath,
 	}
 }
 
@@ -185,9 +185,9 @@ func (ul *YtUploader) Upload(channel string, filename string, cookies []*http.Co
 
 		time.Sleep(3 * time.Second)
 	}
-	if len(ul.screenshotFolder) > 0 {
+	if len(ul.scrPath) > 0 {
 		if data, err := driver.Screenshot(); err == nil {
-			ioutil.WriteFile(filepath.Join(ul.screenshotFolder, "screenshot.png"), data, 0644)
+			ioutil.WriteFile(ul.scrPath, data, 0644)
 		}
 	}
 	return url, err

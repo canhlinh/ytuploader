@@ -18,17 +18,20 @@ import (
 
 var DefaultChromedriverPort = 4444
 var DefaultUserAgent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36"
+var DefaultBrowserCloseDuration = 5 * time.Second
 
 // YtUploader presents an uploader
 type YtUploader struct {
-	scrPath string
+	scrPath              string
+	browserCloseDuration time.Duration
 }
 
 // New creates a new upload instance
 func New(screenshotPath string) *YtUploader {
 
 	return &YtUploader{
-		scrPath: screenshotPath,
+		scrPath:              screenshotPath,
+		browserCloseDuration: DefaultBrowserCloseDuration,
 	}
 }
 
@@ -140,7 +143,7 @@ func (ul *YtUploader) Upload(channel string, filename string, cookies []*http.Co
 	}
 	bar.Finish()
 	bar.Close()
-	time.Sleep(1 * time.Second)
+
 	url, err := getVideoURL(driver)
 	if err != nil {
 		return "", err
@@ -184,7 +187,10 @@ func (ul *YtUploader) Upload(channel string, filename string, cookies []*http.Co
 		}
 
 		time.Sleep(3 * time.Second)
+	} else {
+		time.Sleep(ul.browserCloseDuration)
 	}
+
 	if len(ul.scrPath) > 0 {
 		if data, err := driver.Screenshot(); err == nil {
 			ioutil.WriteFile(ul.scrPath, data, 0644)

@@ -65,19 +65,23 @@ const (
 
 // YtUploader presents an uploader
 type YtUploader struct {
-	screenshotFolder     string
-	browserCloseDuration time.Duration
-	account              string
-	ctx                  context.Context
-	ctxCancel            context.CancelFunc
+	screenshotFolder string
+	account          string
+	userAgent        string
+	ctx              context.Context
+	ctxCancel        context.CancelFunc
 }
 
 // New creates a new upload instance
-func New(screenshotFolder string, account string) *YtUploader {
+func New(screenshotFolder string, account string, userAgent string) *YtUploader {
+	if userAgent == "" {
+		userAgent = DefaultUserAgent
+	}
+
 	uploader := &YtUploader{
-		screenshotFolder:     screenshotFolder,
-		browserCloseDuration: DefaultBrowserCloseDuration,
-		account:              account,
+		screenshotFolder: screenshotFolder,
+		account:          account,
+		userAgent:        userAgent,
 	}
 	return uploader
 }
@@ -87,7 +91,7 @@ func (u *YtUploader) startBrowser() error {
 
 	opts := append(chromedp.DefaultExecAllocatorOptions[:],
 		chromedp.Flag("profile-directory", u.account),
-		chromedp.UserAgent(DefaultUserAgent),
+		chromedp.UserAgent(u.userAgent),
 	)
 	ctx, _ := chromedp.NewExecAllocator(context.Background(), opts...)
 	u.ctx, u.ctxCancel = chromedp.NewContext(ctx)

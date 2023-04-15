@@ -20,7 +20,6 @@ import (
 	"github.com/schollz/progressbar/v3"
 )
 
-var DefaultChromedriverPort = 4444
 var DefaultUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Safari/537.36"
 var DefaultBrowserCloseDuration = 1 * time.Second
 

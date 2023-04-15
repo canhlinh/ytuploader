@@ -10,7 +10,6 @@ import (
 
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
-	ytuploader.DefaultChromedriverPort = 4444
 
 	cookies, err := ytuploader.ParseCookiesFromJSONFile("cookie.json")
 	if err != nil {

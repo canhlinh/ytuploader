@@ -17,8 +17,8 @@ func main() {
 		log.Fatal(err)
 	}
 
-	uploader := ytuploader.New(".")
-	videoURL, err := uploader.Upload("", "/home/kyonguyen/Downloads/Equine_Trot_400fps_Right.avi", cookies.Builtin(), false)
+	uploader := ytuploader.New(".", "someone@gmail.com")
+	videoURL, err := uploader.Upload("", "./big_buck_bunny_720p_20mb.mp4", cookies.Builtin(), false)
 	if err != nil {
 		log.Fatal(err)
 	}

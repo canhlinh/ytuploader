@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -17,21 +16,28 @@ import (
 )
 
 var DefaultChromedriverPort = 4444
-var DefaultUserAgent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36"
+var DefaultUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Safari/537.36"
 var DefaultBrowserCloseDuration = 5 * time.Second
+
+const (
+	YoutuybeUploadURL  = "https://youtube.com/upload?persist_gl=1&gl=US&persist_hl=1&hl=en"
+	YoutubeHomepageURL = "https://www.youtube.com/?persist_gl=1&gl=US&persist_hl=1&hl=en"
+)
 
 // YtUploader presents an uploader
 type YtUploader struct {
-	scrPath              string
+	screenshotFolder     string
 	browserCloseDuration time.Duration
+	account              string
 }
 
 // New creates a new upload instance
-func New(screenshotPath string) *YtUploader {
+func New(screenshotFolder string, account string) *YtUploader {
 
 	return &YtUploader{
-		scrPath:              screenshotPath,
+		screenshotFolder:     screenshotFolder,
 		browserCloseDuration: DefaultBrowserCloseDuration,
+		account:              account,
 	}
 }
 
@@ -50,16 +56,17 @@ func (ul *YtUploader) Upload(channel string, filename string, cookies []*http.Co
 		"--disable-dev-shm-usage",
 		"--disable-gpu",
 		"--headless", // comment out this line to see the browser
-		"--user-agent=" + DefaultUserAgent,
+		"--user-agent=", DefaultUserAgent,
+		"--profile-directory=", ul.account,
 	}})
 
-	driver, err := selenium.NewRemote(caps, "")
+	driver, err := selenium.NewRemote(caps, "http://127.0.0.1:4444/wd/hub")
 	if err != nil {
 		return "", err
 	}
 	defer driver.Close()
 
-	if err := driver.Get("https://www.youtube.com/?persist_gl=1&gl=US&persist_hl=1&hl=en"); err != nil {
+	if err := driver.Get(YoutubeHomepageURL); err != nil {
 		return "", err
 	}
 
@@ -75,35 +82,16 @@ func (ul *YtUploader) Upload(channel string, filename string, cookies []*http.Co
 			return "", err
 		}
 	}
-
-	uploadURL := "https://youtube.com/upload?persist_gl=1&gl=US&persist_hl=1&hl=en"
-	uploadToChannel := false
-
-	if channel != "" {
-		uploadURL = fmt.Sprintf("https://studio.youtube.com/channel/%s?persist_gl=1&gl=US&persist_hl=1&hl=en", channel)
-		uploadToChannel = true
+	time.Sleep(time.Second * 1)
+	if err := driver.Get(YoutubeHomepageURL); err != nil {
+		return "", err
 	}
-
-	if err := driver.Get(uploadURL); err != nil {
+	time.Sleep(time.Second * 3)
+	if err := driver.Get(YoutuybeUploadURL); err != nil {
 		return "", err
 	}
 
-	time.Sleep(time.Second)
-
-	if uploadToChannel {
-		log.Println("Upload to channel")
-		button, err := driver.FindElement(selenium.ByID, "upload-button")
-		if err != nil {
-			button, err = driver.FindElement(selenium.ByID, "upload-icon")
-			if err != nil {
-				return "", err
-			}
-		}
-		if err := button.Click(); err != nil {
-			return "", err
-		}
-	}
-
+	time.Sleep(time.Second * 3)
 	absFilePath, err := filepath.Abs(filename)
 	if err != nil {
 		return "", err
@@ -191,12 +179,14 @@ func (ul *YtUploader) Upload(channel string, filename string, cookies []*http.Co
 		time.Sleep(ul.browserCloseDuration)
 	}
 
-	if len(ul.scrPath) > 0 {
-		if data, err := driver.Screenshot(); err == nil {
-			ioutil.WriteFile(ul.scrPath, data, 0644)
-		}
-	}
+	ul.takeScreenshoot(driver, filename)
 	return url, err
+}
+
+func (ul *YtUploader) takeScreenshoot(driver selenium.WebDriver, filename string) {
+	if data, err := driver.Screenshot(); err == nil {
+		ioutil.WriteFile(filepath.Join(ul.screenshotFolder, ul.account, filename), data, 0644)
+	}
 }
 
 func currentUploadProgress(wd selenium.WebDriver) int {

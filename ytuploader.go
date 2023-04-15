@@ -1,23 +1,27 @@
 package ytuploader
 
 import (
+	"context"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
+	"github.com/chromedp/cdproto/cdp"
+	"github.com/chromedp/cdproto/network"
+	"github.com/chromedp/chromedp"
 	"github.com/schollz/progressbar/v3"
-	"github.com/tebeka/selenium"
-	"github.com/tebeka/selenium/chrome"
 )
 
 var DefaultChromedriverPort = 4444
 var DefaultUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Safari/537.36"
-var DefaultBrowserCloseDuration = 5 * time.Second
+var DefaultBrowserCloseDuration = 1 * time.Second
 
 const (
 	YoutuybeUploadURL  = "https://youtube.com/upload?persist_gl=1&gl=US&persist_hl=1&hl=en"
@@ -43,162 +47,182 @@ func New(screenshotFolder string, account string) *YtUploader {
 
 // Upload uploads file to Youtube
 func (ul *YtUploader) Upload(channel string, filename string, cookies []*http.Cookie, save bool) (string, error) {
-	service, err := selenium.NewChromeDriverService("chromedriver", DefaultChromedriverPort)
+	opts := append(chromedp.DefaultExecAllocatorOptions[:],
+		chromedp.Flag("headless", false),
+	)
+	ctx, cancel := chromedp.NewExecAllocator(context.Background(), opts...)
+	defer cancel()
+
+	ctx, cancel = chromedp.NewContext(ctx)
+	defer cancel()
+
+	if err := chromedp.Run(ctx, setcookiesTasks(YoutubeHomepageURL, cookies...)); err != nil {
+		return "", err
+	}
+
+	if err := uploadFile(ctx, filename); err != nil {
+		return "", err
+	}
+
+	if err := waitingUploadCompleted(ctx); err != nil {
+		return "", err
+	}
+
+	videoURL, err := getVideoURL(ctx)
 	if err != nil {
 		return "", err
 	}
-	defer service.Stop()
 
-	caps := selenium.Capabilities{}
-	caps.AddChrome(chrome.Capabilities{Args: []string{
-		"window-size=1920x1080",
-		"--no-sandbox",
-		"--disable-dev-shm-usage",
-		"--disable-gpu",
-		"--headless", // comment out this line to see the browser
-		"--user-agent=", DefaultUserAgent,
-		"--profile-directory=", ul.account,
-	}})
-
-	driver, err := selenium.NewRemote(caps, "http://127.0.0.1:4444/wd/hub")
-	if err != nil {
-		return "", err
-	}
-	defer driver.Close()
-
-	if err := driver.Get(YoutubeHomepageURL); err != nil {
-		return "", err
-	}
-
-	for _, cookie := range cookies {
-		if err := driver.AddCookie(&selenium.Cookie{
-			Name:   cookie.Name,
-			Value:  cookie.Value,
-			Path:   cookie.Path,
-			Domain: cookie.Domain,
-			Secure: cookie.Secure,
-			Expiry: uint(cookie.Expires.Unix()),
-		}); err != nil {
+	time.Sleep(time.Second)
+	if save {
+		if err := saveVideoTasks(ctx); err != nil {
 			return "", err
 		}
 	}
-	time.Sleep(time.Second * 1)
-	if err := driver.Get(YoutubeHomepageURL); err != nil {
-		return "", err
-	}
-	time.Sleep(time.Second * 3)
-	if err := driver.Get(YoutuybeUploadURL); err != nil {
-		return "", err
-	}
 
-	time.Sleep(time.Second * 3)
+	time.Sleep(ul.browserCloseDuration)
+	ul.takeScreenshoot(ctx, filename)
+	return videoURL, nil
+}
+
+func (ul *YtUploader) takeScreenshoot(ctx context.Context, filename string) {
+	log.Println("taking screenshot")
+
+	folder := filepath.Join(ul.screenshotFolder, ul.account)
+	if err := os.MkdirAll(folder, os.ModePerm); err != nil {
+		log.Println("error:" + err.Error())
+	}
+	filePath := filepath.Join(folder, filename+".jpg")
+
+	var buf []byte
+	if err := chromedp.Run(ctx, chromedp.FullScreenshot(&buf, 90)); err != nil {
+		return
+	}
+	file, err := os.Create(filePath)
+	if err != nil {
+		log.Println(err)
+	}
+	file.Write(buf)
+	file.Close()
+}
+
+func saveVideoTasks(ctx context.Context) error {
+	log.Println("saving the video")
+
+	return chromedp.Run(ctx,
+		chromedp.Evaluate("document.getElementById('toggle-button').scrollIntoView(false);", nil),
+		chromedp.Click(`[name="VIDEO_MADE_FOR_KIDS_NOT_MFK"]`, chromedp.ByQuery, chromedp.NodeVisible),
+		chromedp.Click("#next-button", chromedp.ByID, chromedp.NodeVisible),
+		chromedp.Click("#next-button", chromedp.ByID, chromedp.NodeVisible),
+		chromedp.Click("#done-button", chromedp.ByID, chromedp.NodeVisible),
+	)
+}
+
+func uploadFile(ctx context.Context, filename string) error {
+	log.Println("uploading the video")
+
 	absFilePath, err := filepath.Abs(filename)
 	if err != nil {
-		return "", err
+		return err
 	}
-
 	if _, err := os.Stat(absFilePath); err != nil {
-		return "", err
+		return err
 	}
 
-	element, err := driver.FindElement(selenium.ByXPATH, "//div[@id='content']/input")
-	if err != nil {
-		return "", err
-	}
+	return chromedp.Run(ctx, chromedp.Tasks{
+		chromedp.Navigate(YoutuybeUploadURL),
+		chromedp.WaitVisible("#select-files-button", chromedp.ByID),
+		chromedp.SetUploadFiles(`#content > input[type=file]`, []string{absFilePath}),
+	})
+}
 
-	if err := element.SendKeys(absFilePath); err != nil {
-		return "", err
-	}
+func setcookiesTasks(host string, cookies ...*http.Cookie) chromedp.Tasks {
+	log.Println("set cookies")
 
-	if err := driver.WaitWithTimeout(func(wd selenium.WebDriver) (bool, error) {
-		_, err := wd.FindElement(selenium.ByCSSSelector, ".error-area.style-scope.ytcp-uploads-dialog")
-		return err == nil, nil
-	}, 3*time.Second); err != nil {
-		return "", errors.New("failed to get ytcp-uploads-dialog. timeout")
+	return chromedp.Tasks{
+		chromedp.Navigate(host),
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			for _, cookie := range cookies {
+				exp := (cdp.TimeSinceEpoch)(cookie.Expires)
+				sameSite := network.CookieSameSite("unspecified")
+				switch cookie.SameSite {
+				case http.SameSiteLaxMode:
+					sameSite = network.CookieSameSiteLax
+				case http.SameSiteStrictMode:
+					sameSite = network.CookieSameSiteStrict
+				case http.SameSiteNoneMode:
+					sameSite = network.CookieSameSiteNone
+				}
+				err := network.SetCookie(cookie.Name, cookie.Value).
+					WithExpires(&exp).
+					WithDomain(cookie.Domain).
+					WithHTTPOnly(cookie.HttpOnly).
+					WithSameSite(sameSite).
+					WithSecure(cookie.Secure).
+					WithPath(cookie.Path).
+					Do(ctx)
+				if err != nil {
+					return fmt.Errorf(cookie.Name)
+				}
+			}
+			return nil
+		}),
+		chromedp.Navigate(host),
+		chromedp.WaitVisible(`#avatar-btn`, chromedp.ByID),
 	}
+}
+
+func parsePercentage(s string) (int, error) {
+	re := regexp.MustCompile(`\d*%`)
+	match := re.FindStringSubmatch(s)
+	if len(match) == 0 {
+		return 0, errors.New("not found")
+	} else {
+		return strconv.Atoi(strings.TrimSuffix(match[0], "%"))
+	}
+}
+
+func waitingUploadCompleted(ctx context.Context) error {
+	log.Println("wait uploading complete")
 
 	bar := progressbar.NewOptions(100,
 		progressbar.OptionShowBytes(false),
 		progressbar.OptionSetWidth(15),
 		progressbar.OptionSetDescription("Uploading..."),
 	)
-	if err := driver.WaitWithTimeout(func(wd selenium.WebDriver) (bool, error) {
-		curProgress := currentUploadProgress(wd)
-		bar.Set(curProgress)
-		return curProgress == 100, nil
-	}, 1*time.Hour); err != nil {
-		return "", errors.New("failed to upload video. timeout")
+
+	for {
+		var res string
+		if err := chromedp.Run(ctx, chromedp.Text("#dialog > div > ytcp-animatable.button-area.metadata-fade-in-section.style-scope.ytcp-uploads-dialog > div > div.left-button-area.style-scope.ytcp-uploads-dialog > ytcp-ve > div.error-short.style-scope.ytcp-uploads-dialog", &res)); err == nil {
+			if len(res) > 0 {
+				return errors.New(res)
+			}
+		}
+
+		if err := chromedp.Run(ctx,
+			chromedp.Text(`#dialog > div > ytcp-animatable.button-area.metadata-fade-in-section.style-scope.ytcp-uploads-dialog > div > div.left-button-area.style-scope.ytcp-uploads-dialog > ytcp-video-upload-progress > span`, &res, chromedp.NodeVisible)); err != nil {
+			return err
+		}
+		if strings.Contains(res, "Upload complete") || strings.Contains(res, "Processing up to") {
+			bar.Set(100)
+			bar.Finish()
+			bar.Close()
+			break
+		} else if strings.Contains(res, "Uploading") {
+			progress, _ := parsePercentage(res)
+			bar.Set(progress)
+		} else {
+			return errors.New("something went wrong")
+		}
+		<-time.After(time.Millisecond * 100)
 	}
-	bar.Finish()
-	bar.Close()
-
-	url, err := getVideoURL(driver)
-	if err != nil {
-		return "", err
-	}
-	if save {
-		driver.ExecuteScript(`document.getElementById('toggle-button').scrollIntoView(false);`, nil)
-
-		if e, err := driver.FindElement(selenium.ByName, "VIDEO_MADE_FOR_KIDS_NOT_MFK"); err != nil {
-			return "", err
-		} else {
-			e.Click()
-		}
-
-		time.Sleep(1 * time.Second)
-		if e, err := driver.FindElement(selenium.ByID, "next-button"); err != nil {
-			return "", err
-		} else {
-			e.Click()
-		}
-
-		time.Sleep(1 * time.Second)
-		if e, err := driver.FindElement(selenium.ByID, "next-button"); err != nil {
-			return "", err
-		} else {
-			e.Click()
-		}
-
-		time.Sleep(1 * time.Second)
-
-		if e, err := driver.FindElement(selenium.ByID, "next-button"); err != nil {
-			return "", err
-		} else {
-			e.Click()
-		}
-
-		time.Sleep(1 * time.Second)
-		if e, err := driver.FindElement(selenium.ByID, "done-button"); err != nil {
-			return "", err
-		} else {
-			e.Click()
-		}
-
-		time.Sleep(3 * time.Second)
-	} else {
-		time.Sleep(ul.browserCloseDuration)
-	}
-
-	ul.takeScreenshoot(driver, filename)
-	return url, err
+	log.Println("upload finished")
+	return nil
 }
 
-func (ul *YtUploader) takeScreenshoot(driver selenium.WebDriver, filename string) {
-	if data, err := driver.Screenshot(); err == nil {
-		ioutil.WriteFile(filepath.Join(ul.screenshotFolder, ul.account, filename), data, 0644)
-	}
-}
+func getVideoURL(ctx context.Context) (string, error) {
+	log.Println("getting video url")
 
-func currentUploadProgress(wd selenium.WebDriver) int {
-	if e, err := wd.FindElement(selenium.ByXPATH, `//tp-yt-paper-progress[contains(@class,"ytcp-video-upload-progress-hover")]`); err == nil {
-		rawValue, _ := e.GetAttribute("value")
-		value, _ := strconv.Atoi(rawValue)
-		return value
-	}
-	return 0
-}
-
-func getVideoURL(wd selenium.WebDriver) (string, error) {
 	bar := progressbar.NewOptions(-1,
 		progressbar.OptionSetWidth(15),
 		progressbar.OptionSpinnerType(9),
@@ -210,27 +234,24 @@ func getVideoURL(wd selenium.WebDriver) (string, error) {
 		fmt.Println()
 	}()
 
-	timeout := time.NewTimer(3 * time.Minute)
+	timeout := time.NewTimer(1 * time.Minute)
 	ticker := time.NewTicker(1 * time.Second)
+
 	for {
 		select {
 		case <-timeout.C:
-			return "", errors.New("upload timeout")
+			return "", errors.New("parse link timeout")
 		default:
-			if e, err := wd.FindElement(selenium.ByCSSSelector, "a.style-scope.ytcp-video-info"); err != nil {
-				<-ticker.C
-			} else {
-				href, err := e.GetAttribute("href")
-				if err != nil {
-					return "", err
-				}
-				if href == "" {
-					bar.Add(1)
-					<-ticker.C
-				} else {
-					return href, nil
-				}
+			var nodes []*cdp.Node
+			if err := chromedp.Run(ctx, chromedp.Nodes(`a.style-scope.ytcp-video-info`, &nodes, chromedp.NodeVisible)); err != nil {
+				return "", err
 			}
+			href := nodes[0].AttributeValue("href")
+			if href != "" {
+				return href, nil
+			}
+			bar.Add(1)
+			<-ticker.C
 		}
 
 	}

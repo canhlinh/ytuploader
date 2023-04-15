@@ -68,77 +68,96 @@ type YtUploader struct {
 	screenshotFolder     string
 	browserCloseDuration time.Duration
 	account              string
+	ctx                  context.Context
+	ctxCancel            context.CancelFunc
 }
 
 // New creates a new upload instance
 func New(screenshotFolder string, account string) *YtUploader {
-
-	return &YtUploader{
+	uploader := &YtUploader{
 		screenshotFolder:     screenshotFolder,
 		browserCloseDuration: DefaultBrowserCloseDuration,
 		account:              account,
 	}
+	return uploader
 }
 
-// Upload uploads file to Youtube
-func (ul *YtUploader) Upload(channel string, filename string, cookies []*http.Cookie, save bool) (string, error) {
+func (u *YtUploader) startBrowser() error {
+	log.Println("starting browser")
+
 	opts := append(chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.Flag("profile-directory", ul.account),
+		chromedp.Flag("profile-directory", u.account),
 		chromedp.UserAgent(DefaultUserAgent),
 	)
-	ctx, cancel := chromedp.NewExecAllocator(context.Background(), opts...)
-	defer cancel()
-
-	ctx, cancel = chromedp.NewContext(ctx)
-	defer cancel()
-
-	chromedp.Run(ctx, chromedp.ActionFunc(func(ctx context.Context) error {
+	ctx, _ := chromedp.NewExecAllocator(context.Background(), opts...)
+	u.ctx, u.ctxCancel = chromedp.NewContext(ctx)
+	return chromedp.Run(u.ctx, chromedp.ActionFunc(func(ctx context.Context) error {
 		if _, err := page.AddScriptToEvaluateOnNewDocument(BypassHeadlessScript).Do(ctx); err != nil {
 			return err
 		}
 		return nil
 	}))
+}
 
-	if err := chromedp.Run(ctx, setcookiesTasks(YoutubeHomepageURL, cookies...)); err != nil {
+func (u *YtUploader) closeBrowser() {
+	log.Println("closing browser")
+	u.ctxCancel()
+}
+
+func (u *YtUploader) Upload(channel string, filename string, cookies []*http.Cookie, save bool) (string, error) {
+	if err := u.startBrowser(); err != nil {
+		return "", err
+	}
+	defer u.closeBrowser()
+
+	videoURL, err := u.upload(channel, filename, cookies, save)
+	if err != nil {
+		u.capture("error_at:%s" + time.Now().Format(time.RFC3339))
+	}
+	return videoURL, err
+}
+
+// Upload uploads file to Youtube
+func (u *YtUploader) upload(channel string, filename string, cookies []*http.Cookie, save bool) (string, error) {
+	if err := u.setCookies(YoutubeHomepageURL, cookies...); err != nil {
 		return "", err
 	}
 
-	if err := uploadFile(ctx, filename); err != nil {
+	if err := u.submitFile(filename); err != nil {
 		return "", err
 	}
 
-	if err := waitingUploadCompleted(ctx); err != nil {
+	if err := u.waitingUploadCompleted(); err != nil {
 		return "", err
 	}
 
-	videoURL, err := getVideoURL(ctx)
+	videoURL, err := u.getVideoURL()
 	if err != nil {
 		return "", err
 	}
-
-	time.Sleep(time.Second)
 	if save {
-		if err := saveVideoTasks(ctx); err != nil {
+		if err := u.saveVideo(); err != nil {
 			return "", err
 		}
 	}
 
-	time.Sleep(ul.browserCloseDuration)
-	ul.takeScreenshoot(ctx, filename)
+	time.Sleep(time.Second)
+	u.capture(filename)
 	return videoURL, nil
 }
 
-func (ul *YtUploader) takeScreenshoot(ctx context.Context, filename string) {
+// capture takes a fullscreen shoot
+func (u *YtUploader) capture(filename string) {
 	log.Println("taking screenshot")
 
-	folder := filepath.Join(ul.screenshotFolder, ul.account)
+	folder := filepath.Join(u.screenshotFolder, u.account)
 	if err := os.MkdirAll(folder, os.ModePerm); err != nil {
 		log.Println("error:" + err.Error())
 	}
 	filePath := filepath.Join(folder, filename+".jpg")
 
 	var buf []byte
-	if err := chromedp.Run(ctx, chromedp.FullScreenshot(&buf, 90)); err != nil {
+	if err := chromedp.Run(u.ctx, chromedp.FullScreenshot(&buf, 90)); err != nil {
 		return
 	}
 	file, err := os.Create(filePath)
@@ -149,10 +168,10 @@ func (ul *YtUploader) takeScreenshoot(ctx context.Context, filename string) {
 	file.Close()
 }
 
-func saveVideoTasks(ctx context.Context) error {
+func (u *YtUploader) saveVideo() error {
 	log.Println("saving the video")
 
-	return chromedp.Run(ctx,
+	return chromedp.Run(u.ctx,
 		chromedp.Evaluate("document.getElementById('toggle-button').scrollIntoView(false);", nil),
 		chromedp.Click(`[name="VIDEO_MADE_FOR_KIDS_NOT_MFK"]`, chromedp.ByQuery, chromedp.NodeVisible),
 		chromedp.Click("#next-button", chromedp.ByID, chromedp.NodeVisible),
@@ -161,7 +180,7 @@ func saveVideoTasks(ctx context.Context) error {
 	)
 }
 
-func uploadFile(ctx context.Context, filename string) error {
+func (u *YtUploader) submitFile(filename string) error {
 	log.Println("uploading the video")
 
 	absFilePath, err := filepath.Abs(filename)
@@ -172,17 +191,17 @@ func uploadFile(ctx context.Context, filename string) error {
 		return err
 	}
 
-	return chromedp.Run(ctx, chromedp.Tasks{
+	return chromedp.Run(u.ctx, chromedp.Tasks{
 		chromedp.Navigate(YoutuybeUploadURL),
 		chromedp.WaitVisible("#select-files-button", chromedp.ByID),
 		chromedp.SetUploadFiles(`#content > input[type=file]`, []string{absFilePath}),
 	})
 }
 
-func setcookiesTasks(host string, cookies ...*http.Cookie) chromedp.Tasks {
+func (u *YtUploader) setCookies(host string, cookies ...*http.Cookie) error {
 	log.Println("set cookies")
 
-	return chromedp.Tasks{
+	return chromedp.Run(u.ctx, chromedp.Tasks{
 		chromedp.Navigate(host),
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			for _, cookie := range cookies {
@@ -212,7 +231,7 @@ func setcookiesTasks(host string, cookies ...*http.Cookie) chromedp.Tasks {
 		}),
 		chromedp.Navigate(host),
 		chromedp.WaitVisible(`#avatar-btn`, chromedp.ByID),
-	}
+	})
 }
 
 func parsePercentage(s string) (int, error) {
@@ -225,7 +244,7 @@ func parsePercentage(s string) (int, error) {
 	}
 }
 
-func waitingUploadCompleted(ctx context.Context) error {
+func (u *YtUploader) waitingUploadCompleted() error {
 	log.Println("wait uploading complete")
 
 	bar := progressbar.NewOptions(100,
@@ -236,13 +255,14 @@ func waitingUploadCompleted(ctx context.Context) error {
 
 	for {
 		var res string
-		if err := chromedp.Run(ctx, chromedp.Text("#dialog > div > ytcp-animatable.button-area.metadata-fade-in-section.style-scope.ytcp-uploads-dialog > div > div.left-button-area.style-scope.ytcp-uploads-dialog > ytcp-ve > div.error-short.style-scope.ytcp-uploads-dialog", &res)); err == nil {
+		if err := chromedp.Run(u.ctx,
+			chromedp.Text("#dialog > div > ytcp-animatable.button-area.metadata-fade-in-section.style-scope.ytcp-uploads-dialog > div > div.left-button-area.style-scope.ytcp-uploads-dialog > ytcp-ve > div.error-short.style-scope.ytcp-uploads-dialog", &res)); err == nil {
 			if len(res) > 0 {
 				return errors.New(res)
 			}
 		}
 
-		if err := chromedp.Run(ctx,
+		if err := chromedp.Run(u.ctx,
 			chromedp.Text(`#dialog > div > ytcp-animatable.button-area.metadata-fade-in-section.style-scope.ytcp-uploads-dialog > div > div.left-button-area.style-scope.ytcp-uploads-dialog > ytcp-video-upload-progress > span`, &res, chromedp.NodeVisible)); err != nil {
 			return err
 		}
@@ -263,7 +283,7 @@ func waitingUploadCompleted(ctx context.Context) error {
 	return nil
 }
 
-func getVideoURL(ctx context.Context) (string, error) {
+func (u *YtUploader) getVideoURL() (string, error) {
 	log.Println("getting video url")
 
 	bar := progressbar.NewOptions(-1,
@@ -286,7 +306,7 @@ func getVideoURL(ctx context.Context) (string, error) {
 			return "", errors.New("parse link timeout")
 		default:
 			var nodes []*cdp.Node
-			if err := chromedp.Run(ctx, chromedp.Nodes(`a.style-scope.ytcp-video-info`, &nodes, chromedp.NodeVisible)); err != nil {
+			if err := chromedp.Run(u.ctx, chromedp.Nodes(`a.style-scope.ytcp-video-info`, &nodes, chromedp.NodeVisible)); err != nil {
 				return "", err
 			}
 			href := nodes[0].AttributeValue("href")
@@ -296,6 +316,5 @@ func getVideoURL(ctx context.Context) (string, error) {
 			bar.Add(1)
 			<-ticker.C
 		}
-
 	}
 }

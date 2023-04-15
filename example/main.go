@@ -17,9 +17,17 @@ func main() {
 	}
 
 	uploader := ytuploader.New("./", "someone@gmail.com", ytuploader.DefaultUserAgent)
-	videoURL, err := uploader.Upload("", "./big_buck_bunny_720p_20mb.mp4", cookies.Builtin(), false)
-	if err != nil {
+	uploader.Headless = false
+	if videoURL, err := uploader.Upload("", "./big_buck_bunny_720p_20mb.mp4", cookies.Builtin(), false); err != nil {
 		log.Fatal(err)
+	} else {
+		fmt.Println(videoURL)
 	}
-	fmt.Println(videoURL)
+
+	uploader.Headless = true
+	if videoURL, err := uploader.Upload("", "./big_buck_bunny_720p_20mb.mp4", cookies.Builtin(), false); err != nil {
+		log.Fatal(err)
+	} else {
+		fmt.Println(videoURL)
+	}
 }

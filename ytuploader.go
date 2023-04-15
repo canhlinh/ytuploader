@@ -70,6 +70,7 @@ type YtUploader struct {
 	userAgent        string
 	ctx              context.Context
 	ctxCancel        context.CancelFunc
+	Headless         bool
 }
 
 // New creates a new upload instance
@@ -82,6 +83,7 @@ func New(screenshotFolder string, account string, userAgent string) *YtUploader 
 		screenshotFolder: screenshotFolder,
 		account:          account,
 		userAgent:        userAgent,
+		Headless:         true,
 	}
 	return uploader
 }
@@ -91,7 +93,12 @@ func (u *YtUploader) startBrowser() error {
 
 	opts := append(chromedp.DefaultExecAllocatorOptions[:],
 		chromedp.Flag("profile-directory", u.account),
-		chromedp.UserAgent(u.userAgent),
+		chromedp.Flag("user-agent", u.userAgent),
+		chromedp.Flag("no-sandbox", true),
+		chromedp.Flag("disable-gpu", true),
+		chromedp.Flag("headless", u.Headless),
+		chromedp.Flag("hide-scrollbars", true),
+		chromedp.Flag("mute-audio", true),
 	)
 	ctx, _ := chromedp.NewExecAllocator(context.Background(), opts...)
 	u.ctx, u.ctxCancel = chromedp.NewContext(ctx)

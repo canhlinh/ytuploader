@@ -92,6 +92,9 @@ func (u *YtUploader) startBrowser() error {
 	log.Println("starting browser")
 
 	opts := append(chromedp.DefaultExecAllocatorOptions[:],
+		chromedp.Flag("start-fullscreen", true),
+		chromedp.Flag("enable-automation", true),
+		chromedp.Flag("disable-extensions", true),
 		chromedp.Flag("profile-directory", u.account),
 		chromedp.Flag("user-agent", u.userAgent),
 		chromedp.Flag("no-sandbox", true),
@@ -131,24 +134,24 @@ func (u *YtUploader) Upload(channel string, filename string, cookies []*http.Coo
 // Upload uploads file to Youtube
 func (u *YtUploader) upload(channel string, filename string, cookies []*http.Cookie, save bool) (string, error) {
 	if err := u.setCookies(YoutubeHomepageURL, cookies...); err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to get cookies %s", err.Error())
 	}
 
 	if err := u.submitFile(filename); err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to submit file %s", err.Error())
 	}
 
 	if err := u.waitingUploadCompleted(); err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to waiting upload %s", err.Error())
 	}
 
 	videoURL, err := u.getVideoURL()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to get videoURL %s", err.Error())
 	}
 	if save {
 		if err := u.saveVideo(); err != nil {
-			return "", err
+			return "", fmt.Errorf("failed to save video %s", err.Error())
 		}
 	}
 
@@ -211,8 +214,10 @@ func (u *YtUploader) submitFile(filename string) error {
 
 func (u *YtUploader) setCookies(host string, cookies ...*http.Cookie) error {
 	log.Println("set cookies")
+	timeout, cancel := context.WithTimeout(u.ctx, time.Second*10)
+	defer cancel()
 
-	return chromedp.Run(u.ctx, chromedp.Tasks{
+	return chromedp.Run(timeout, chromedp.Tasks{
 		chromedp.Navigate(host),
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			for _, cookie := range cookies {

@@ -126,7 +126,7 @@ func (u *YtUploader) Upload(channel string, filename string, cookies []*http.Coo
 
 	videoURL, err := u.upload(channel, filename, cookies, save)
 	if err != nil {
-		u.capture("error_at:%s" + time.Now().Format(time.RFC3339))
+		u.capture("error_at:" + time.Now().Format(time.RFC3339))
 	}
 	return videoURL, err
 }

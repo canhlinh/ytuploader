@@ -194,24 +194,6 @@ func (u *YtUploader) saveVideo() error {
 	)
 }
 
-func (u *YtUploader) submitFile(filename string) error {
-	log.Println("uploading the video")
-
-	absFilePath, err := filepath.Abs(filename)
-	if err != nil {
-		return err
-	}
-	if _, err := os.Stat(absFilePath); err != nil {
-		return err
-	}
-
-	return chromedp.Run(u.ctx, chromedp.Tasks{
-		chromedp.Navigate(YoutuybeUploadURL),
-		chromedp.WaitVisible("#select-files-button", chromedp.ByID),
-		chromedp.SetUploadFiles(`#content > input[type=file]`, []string{absFilePath}),
-	})
-}
-
 func (u *YtUploader) setCookies(host string, cookies ...*http.Cookie) error {
 	log.Println("set cookies")
 	timeout, cancel := context.WithTimeout(u.ctx, time.Second*10)
@@ -247,6 +229,26 @@ func (u *YtUploader) setCookies(host string, cookies ...*http.Cookie) error {
 		}),
 		chromedp.Navigate(host),
 		chromedp.WaitVisible(`#avatar-btn`, chromedp.ByID),
+	})
+}
+
+func (u *YtUploader) submitFile(filename string) error {
+	log.Println("uploading the video")
+	timeout, cancel := context.WithTimeout(u.ctx, time.Second*10)
+	defer cancel()
+
+	absFilePath, err := filepath.Abs(filename)
+	if err != nil {
+		return err
+	}
+	if _, err := os.Stat(absFilePath); err != nil {
+		return err
+	}
+
+	return chromedp.Run(timeout, chromedp.Tasks{
+		chromedp.Navigate(YoutuybeUploadURL),
+		chromedp.WaitVisible("#select-files-button", chromedp.ByID),
+		chromedp.SetUploadFiles(`#content > input[type=file]`, []string{absFilePath}),
 	})
 }
 

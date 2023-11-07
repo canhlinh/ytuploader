@@ -18,14 +18,15 @@ func main() {
 
 	uploader := ytuploader.New("./", "someone@gmail.com", ytuploader.DefaultUserAgent)
 	uploader.Headless = false
-	if videoURL, err := uploader.Upload("", "./big_buck_bunny_720p_20mb.mp4", cookies.Builtin(), false); err != nil {
+	thumbnail := "sample.jpg"
+	if videoURL, err := uploader.Upload("", "./big_buck_bunny_720p_20mb.mp4", cookies.Builtin(), &thumbnail, false); err != nil {
 		log.Fatal(err)
 	} else {
 		fmt.Println(videoURL)
 	}
 
 	uploader.Headless = true
-	if videoURL, err := uploader.Upload("", "./big_buck_bunny_720p_20mb.mp4", cookies.Builtin(), false); err != nil {
+	if videoURL, err := uploader.Upload("", "./big_buck_bunny_720p_20mb.mp4", cookies.Builtin(), &thumbnail, false); err != nil {
 		log.Fatal(err)
 	} else {
 		fmt.Println(videoURL)

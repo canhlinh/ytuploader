@@ -100,7 +100,7 @@ func (u *YtUploader) startBrowser() error {
 		chromedp.Flag("no-sandbox", true),
 		chromedp.Flag("disable-gpu", true),
 		chromedp.Flag("headless", u.Headless),
-		chromedp.Flag("hide-scrollbars", true),
+		chromedp.Flag("window-size", "1920,1080"),
 		chromedp.Flag("mute-audio", true),
 	)
 	ctx, _ := chromedp.NewExecAllocator(context.Background(), opts...)
@@ -118,13 +118,13 @@ func (u *YtUploader) closeBrowser() {
 	u.ctxCancel()
 }
 
-func (u *YtUploader) Upload(channel string, filename string, cookies []*http.Cookie, save bool) (string, error) {
+func (u *YtUploader) Upload(channel string, filename string, cookies []*http.Cookie, thumbnail *string, save bool) (string, error) {
 	if err := u.startBrowser(); err != nil {
 		return "", err
 	}
 	defer u.closeBrowser()
 
-	videoURL, err := u.upload(channel, filename, cookies, save)
+	videoURL, err := u.upload(channel, filename, cookies, thumbnail, save)
 	if err != nil {
 		u.capture("error_at:" + time.Now().Format(time.RFC3339))
 	}
@@ -132,7 +132,7 @@ func (u *YtUploader) Upload(channel string, filename string, cookies []*http.Coo
 }
 
 // Upload uploads file to Youtube
-func (u *YtUploader) upload(channel string, filename string, cookies []*http.Cookie, save bool) (string, error) {
+func (u *YtUploader) upload(channel string, filename string, cookies []*http.Cookie, thumbnail *string, save bool) (string, error) {
 	if err := u.setCookies(YoutubeHomepageURL, cookies...); err != nil {
 		return "", fmt.Errorf("failed to get cookies %s", err.Error())
 	}
@@ -145,12 +145,23 @@ func (u *YtUploader) upload(channel string, filename string, cookies []*http.Coo
 		return "", fmt.Errorf("failed to waiting upload %s", err.Error())
 	}
 
+	if thumbnail != nil {
+		if err := u.uploadThumbnail(*thumbnail); err != nil {
+			return "", err
+		}
+	}
+
 	videoURL, err := u.getVideoURL()
 	if err != nil {
 		return "", fmt.Errorf("failed to get videoURL %s", err.Error())
 	}
+
 	if save {
 		if err := u.saveVideo(); err != nil {
+			return "", fmt.Errorf("failed to save video %s", err.Error())
+		}
+	} else {
+		if err := u.closeDialogBox(); err != nil {
 			return "", fmt.Errorf("failed to save video %s", err.Error())
 		}
 	}
@@ -182,12 +193,26 @@ func (u *YtUploader) capture(filename string) {
 	file.Close()
 }
 
+func (u *YtUploader) closeDialogBox() error {
+	log.Println("closing popup")
+	// timeout, cancel := context.WithTimeout(u.ctx, time.Second*3)
+	// defer cancel()
+	return chromedp.Run(u.ctx,
+		chromedp.Click(`[name="VIDEO_MADE_FOR_KIDS_NOT_MFK"]`, chromedp.ByQuery, chromedp.NodeVisible),
+		chromedp.Click("#next-button", chromedp.ByID, chromedp.NodeVisible),
+		chromedp.Click("#next-button", chromedp.ByID, chromedp.NodeVisible),
+		chromedp.Click("#next-button", chromedp.ByID, chromedp.NodeVisible),
+		chromedp.Click(`//*[@aria-label="Save and close"]`, chromedp.BySearch),
+	)
+}
+
 func (u *YtUploader) saveVideo() error {
 	log.Println("saving the video")
+	<-time.After(time.Millisecond * 100)
 
 	return chromedp.Run(u.ctx,
-		chromedp.Evaluate("document.getElementById('toggle-button').scrollIntoView(false);", nil),
 		chromedp.Click(`[name="VIDEO_MADE_FOR_KIDS_NOT_MFK"]`, chromedp.ByQuery, chromedp.NodeVisible),
+		chromedp.Click("#next-button", chromedp.ByID, chromedp.NodeVisible),
 		chromedp.Click("#next-button", chromedp.ByID, chromedp.NodeVisible),
 		chromedp.Click("#next-button", chromedp.ByID, chromedp.NodeVisible),
 		chromedp.Click("#done-button", chromedp.ByID, chromedp.NodeVisible),
@@ -324,7 +349,9 @@ func (u *YtUploader) getVideoURL() (string, error) {
 			return "", errors.New("parse link timeout")
 		default:
 			var nodes []*cdp.Node
-			if err := chromedp.Run(u.ctx, chromedp.Nodes(`a.style-scope.ytcp-video-info`, &nodes, chromedp.NodeVisible)); err != nil {
+			if err := chromedp.Run(u.ctx,
+				chromedp.Evaluate("document.getElementById('toggle-button').scrollIntoView(false);", nil),
+				chromedp.Nodes(`a.style-scope.ytcp-video-info`, &nodes, chromedp.NodeVisible)); err != nil {
 				return "", err
 			}
 			href := nodes[0].AttributeValue("href")
@@ -335,4 +362,21 @@ func (u *YtUploader) getVideoURL() (string, error) {
 			<-ticker.C
 		}
 	}
+}
+
+func (u *YtUploader) uploadThumbnail(thumbnail string) error {
+	log.Println("uploading thumbnail")
+
+	timeout, cancel := context.WithTimeout(u.ctx, time.Second*10)
+	defer cancel()
+
+	absFilePath, _ := filepath.Abs(thumbnail)
+	if err := chromedp.Run(timeout,
+		chromedp.WaitVisible("#select-button", chromedp.ByID),
+		chromedp.SetUploadFiles(`#file-loader`, []string{absFilePath}),
+		chromedp.WaitVisible("#img-with-fallback", chromedp.ByID),
+	); err != nil {
+		return err
+	}
+	return nil
 }

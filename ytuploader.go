@@ -16,6 +16,7 @@ import (
 	"github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/cdproto/page"
+	"github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/chromedp"
 	"github.com/schollz/progressbar/v3"
 )
@@ -194,28 +195,42 @@ func (u *YtUploader) capture(filename string) {
 }
 
 func (u *YtUploader) closeDialogBox() error {
-	log.Println("closing popup")
-	// timeout, cancel := context.WithTimeout(u.ctx, time.Second*3)
-	// defer cancel()
+	waitQuery := func(ctx context.Context, eci runtime.ExecutionContextID, n ...*cdp.Node) error {
+		<-time.After(time.Millisecond * 300)
+		return nil
+	}
 	return chromedp.Run(u.ctx,
 		chromedp.Click(`[name="VIDEO_MADE_FOR_KIDS_NOT_MFK"]`, chromedp.ByQuery, chromedp.NodeVisible),
+		chromedp.QueryAfter("html", waitQuery),
 		chromedp.Click("#next-button", chromedp.ByID, chromedp.NodeVisible),
+		chromedp.QueryAfter("html", waitQuery),
 		chromedp.Click("#next-button", chromedp.ByID, chromedp.NodeVisible),
+		chromedp.QueryAfter("html", waitQuery),
 		chromedp.Click("#next-button", chromedp.ByID, chromedp.NodeVisible),
-		chromedp.Click(`//*[@aria-label="Save and close"]`, chromedp.BySearch),
+		chromedp.QueryAfter("html", waitQuery),
+		chromedp.Click(`//*[@aria-label="Save and close"]/tp-yt-iron-icon`, chromedp.BySearch),
+		chromedp.QueryAfter("html", waitQuery),
 	)
 }
 
 func (u *YtUploader) saveVideo() error {
 	log.Println("saving the video")
-	<-time.After(time.Millisecond * 100)
+	waitQuery := func(ctx context.Context, eci runtime.ExecutionContextID, n ...*cdp.Node) error {
+		<-time.After(time.Millisecond * 300)
+		return nil
+	}
 
 	return chromedp.Run(u.ctx,
 		chromedp.Click(`[name="VIDEO_MADE_FOR_KIDS_NOT_MFK"]`, chromedp.ByQuery, chromedp.NodeVisible),
+		chromedp.QueryAfter("html", waitQuery),
 		chromedp.Click("#next-button", chromedp.ByID, chromedp.NodeVisible),
+		chromedp.QueryAfter("html", waitQuery),
 		chromedp.Click("#next-button", chromedp.ByID, chromedp.NodeVisible),
+		chromedp.QueryAfter("html", waitQuery),
 		chromedp.Click("#next-button", chromedp.ByID, chromedp.NodeVisible),
+		chromedp.QueryAfter("html", waitQuery),
 		chromedp.Click("#done-button", chromedp.ByID, chromedp.NodeVisible),
+		chromedp.QueryAfter("html", waitQuery),
 	)
 }
 
@@ -375,6 +390,7 @@ func (u *YtUploader) uploadThumbnail(thumbnail string) error {
 		chromedp.WaitVisible("#select-button", chromedp.ByID),
 		chromedp.SetUploadFiles(`#file-loader`, []string{absFilePath}),
 		chromedp.WaitVisible("#img-with-fallback", chromedp.ByID),
+		chromedp.Click("#img-with-fallback", chromedp.ByID, chromedp.NodeVisible),
 	); err != nil {
 		return err
 	}

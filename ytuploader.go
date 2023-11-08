@@ -21,7 +21,7 @@ import (
 	"github.com/schollz/progressbar/v3"
 )
 
-var DefaultUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Safari/537.36"
+var DefaultUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36"
 var DefaultBrowserCloseDuration = 1 * time.Second
 
 const (
@@ -167,7 +167,7 @@ func (u *YtUploader) upload(channel string, filename string, cookies []*http.Coo
 		}
 	}
 
-	time.Sleep(time.Second)
+	time.Sleep(time.Second * 1)
 	u.capture(filename)
 	return videoURL, nil
 }
@@ -194,43 +194,43 @@ func (u *YtUploader) capture(filename string) {
 	file.Close()
 }
 
+var waitQuery = chromedp.QueryAfter("html", func(ctx context.Context, eci runtime.ExecutionContextID, n ...*cdp.Node) error {
+	<-time.After(time.Millisecond * 1000)
+	return nil
+})
+var nextBtnAction = chromedp.Click("#next-button", chromedp.ByID, chromedp.NodeVisible)
+
 func (u *YtUploader) closeDialogBox() error {
-	waitQuery := func(ctx context.Context, eci runtime.ExecutionContextID, n ...*cdp.Node) error {
-		<-time.After(time.Millisecond * 300)
-		return nil
-	}
-	return chromedp.Run(u.ctx,
-		chromedp.Click(`[name="VIDEO_MADE_FOR_KIDS_NOT_MFK"]`, chromedp.ByQuery, chromedp.NodeVisible),
-		chromedp.QueryAfter("html", waitQuery),
-		chromedp.Click("#next-button", chromedp.ByID, chromedp.NodeVisible),
-		chromedp.QueryAfter("html", waitQuery),
-		chromedp.Click("#next-button", chromedp.ByID, chromedp.NodeVisible),
-		chromedp.QueryAfter("html", waitQuery),
-		chromedp.Click("#next-button", chromedp.ByID, chromedp.NodeVisible),
-		chromedp.QueryAfter("html", waitQuery),
+	log.Println("saving the draft video")
+	ctx, cancel := context.WithTimeout(u.ctx, time.Second*5)
+	defer cancel()
+	return chromedp.Run(ctx,
+		chromedp.Click(`tp-yt-paper-radio-button[name='VIDEO_MADE_FOR_KIDS_NOT_MFK']`, chromedp.ByQuery, chromedp.NodeVisible),
+		nextBtnAction,
+		waitQuery,
+		nextBtnAction,
+		waitQuery,
+		nextBtnAction,
+		waitQuery,
 		chromedp.Click(`//*[@aria-label="Save and close"]/tp-yt-iron-icon`, chromedp.BySearch),
-		chromedp.QueryAfter("html", waitQuery),
+		waitQuery,
 	)
 }
 
 func (u *YtUploader) saveVideo() error {
 	log.Println("saving the video")
-	waitQuery := func(ctx context.Context, eci runtime.ExecutionContextID, n ...*cdp.Node) error {
-		<-time.After(time.Millisecond * 300)
-		return nil
-	}
 
-	return chromedp.Run(u.ctx,
-		chromedp.Click(`[name="VIDEO_MADE_FOR_KIDS_NOT_MFK"]`, chromedp.ByQuery, chromedp.NodeVisible),
-		chromedp.QueryAfter("html", waitQuery),
-		chromedp.Click("#next-button", chromedp.ByID, chromedp.NodeVisible),
-		chromedp.QueryAfter("html", waitQuery),
-		chromedp.Click("#next-button", chromedp.ByID, chromedp.NodeVisible),
-		chromedp.QueryAfter("html", waitQuery),
-		chromedp.Click("#next-button", chromedp.ByID, chromedp.NodeVisible),
-		chromedp.QueryAfter("html", waitQuery),
-		chromedp.Click("#done-button", chromedp.ByID, chromedp.NodeVisible),
-		chromedp.QueryAfter("html", waitQuery),
+	ctx, cancel := context.WithTimeout(u.ctx, time.Second*5)
+	defer cancel()
+
+	return chromedp.Run(ctx,
+		chromedp.Click(`[name='VIDEO_MADE_FOR_KIDS_NOT_MFK']`, chromedp.ByQuery, chromedp.NodeVisible),
+		nextBtnAction,
+		waitQuery,
+		nextBtnAction,
+		waitQuery,
+		nextBtnAction,
+		waitQuery,
 	)
 }
 

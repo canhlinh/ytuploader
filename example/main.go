@@ -16,7 +16,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	uploader := ytuploader.New("./", "someone@gmail.com", ytuploader.DefaultUserAgent)
+	uploader := ytuploader.New("./", "someone@gmail.com", ytuploader.DefaultUserAgent, nil)
 	uploader.Headless = false
 	thumbnail := "sample.jpg"
 	if videoURL, err := uploader.Upload("", "./big_buck_bunny_720p_20mb.mp4", cookies.Builtin(), &thumbnail, false); err != nil {

@@ -72,10 +72,22 @@ type YtUploader struct {
 	ctx              context.Context
 	ctxCancel        context.CancelFunc
 	Headless         bool
+	proxy            *Proxy
+}
+
+type Proxy struct {
+	Host string `json:"host"`
+	Port int    `json:"port"`
+	User string `json:"user"`
+	Pass string `json:"pass"`
+}
+
+func (p *Proxy) String() string {
+	return fmt.Sprintf("http://%s:%s@%s:%d", p.User, p.Pass, p.Host, p.Port)
 }
 
 // New creates a new upload instance
-func New(screenshotFolder string, account string, userAgent string) *YtUploader {
+func New(screenshotFolder string, account string, userAgent string, proxy *Proxy) *YtUploader {
 	if userAgent == "" {
 		userAgent = DefaultUserAgent
 	}
@@ -85,6 +97,7 @@ func New(screenshotFolder string, account string, userAgent string) *YtUploader 
 		account:          account,
 		userAgent:        userAgent,
 		Headless:         true,
+		proxy:            proxy,
 	}
 	return uploader
 }
@@ -104,6 +117,10 @@ func (u *YtUploader) startBrowser() error {
 		chromedp.Flag("window-size", "1920,1080"),
 		chromedp.Flag("mute-audio", true),
 	)
+	if u.proxy != nil {
+		opts = append(opts, chromedp.ProxyServer(u.proxy.String()))
+	}
+
 	ctx, _ := chromedp.NewExecAllocator(context.Background(), opts...)
 	u.ctx, u.ctxCancel = chromedp.NewContext(ctx)
 	return chromedp.Run(u.ctx, chromedp.ActionFunc(func(ctx context.Context) error {
